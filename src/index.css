@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 217 91% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 221 9% 46%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 40%;
+    --radius: 0.625rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 217 91% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 91% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Markdown Body Styles */
+  .markdown-body {
+    @apply text-[15px] leading-[1.8];
+    color: hsl(var(--foreground) / 0.85);
+  }
+
+  /* Anchor links */
+  .markdown-body .anchor-link {
+    @apply ml-2 opacity-0 transition-opacity inline-block text-muted-foreground hover:text-primary;
+    text-decoration: none;
+  }
+
+  .markdown-body h1:hover .anchor-link,
+  .markdown-body h2:hover .anchor-link,
+  .markdown-body h3:hover .anchor-link,
+  .markdown-body h4:hover .anchor-link {
+    @apply opacity-100;
+  }
+
+  .markdown-body .anchor-link::after {
+    content: "#";
+    font-size: 0.8em;
+  }
+
+  /* Lists with task items */
+  .markdown-body ul li {
+    @apply relative;
+  }
+
+  .markdown-body ul li input[type="checkbox"] {
+    @apply hidden;
+  }
+
+  /* Nested lists */
+  .markdown-body ul ul,
+  .markdown-body ul ol,
+  .markdown-body ol ul,
+  .markdown-body ol ol {
+    @apply mt-1 mb-1;
+  }
+
+  /* Table styles */
+  .markdown-body table {
+    @apply border-separate border-spacing-0 rounded-lg overflow-hidden border border-border;
+  }
+
+  .markdown-body table th {
+    @apply bg-muted/70 font-semibold text-foreground/90;
+  }
+
+  .markdown-body table td,
+  .markdown-body table th {
+    @apply border-b border-border/60 px-4 py-3 text-left;
+  }
+
+  .markdown-body table tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Code block styles */
+  .markdown-body pre {
+    @apply relative rounded-lg overflow-hidden border border-border/60;
+  }
+
+  .markdown-body pre > div {
+    @apply !bg-muted/40 !m-0 !rounded-lg;
+  }
+
+  .markdown-body pre code {
+    @apply !bg-transparent !p-0 !border-0;
+  }
+
+  /* Inline code in paragraphs */
+  .markdown-body p code,
+  .markdown-body li code,
+  .markdown-body td code {
+    @apply px-1.5 py-0.5 text-[13px] bg-muted rounded-md border border-border/50 font-mono;
+  }
+
+  /* Image styles */
+  .markdown-body img {
+    @apply max-w-full rounded-lg my-6 border border-border/40 shadow-sm;
+  }
+
+  /* Blockquote enhancement */
+  .markdown-body blockquote {
+    @apply relative;
+  }
+
+  .markdown-body blockquote p:first-child {
+    @apply mt-0;
+  }
+
+  .markdown-body blockquote p:last-child {
+    @apply mb-0;
+  }
+
+  /* Horizontal rule */
+  .markdown-body hr {
+    @apply my-8 border-0 border-t border-border/60;
+  }
+
+  /* Link hover enhancement */
+  .markdown-body a {
+    @apply break-words;
+  }
+
+  /* Selection color */
+  .markdown-body ::selection {
+    @apply bg-primary/20;
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbar */
+  .overflow-y-auto::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+
+}
+
+/* Syntax highlighter overrides */
+pre[class*="language-"] {
+  @apply !bg-muted/40 !border !border-border/60;
+}
+
+code[class*="language-"] {
+  @apply !bg-transparent !text-foreground/90;
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace !important;
+}
