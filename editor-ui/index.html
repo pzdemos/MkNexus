@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-height=initial-scale=1.0">
+  <title>MkNexus — Editorial Workspace</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 左侧文件列表 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>📁 文档</h2>
+        <div class="sidebar-actions">
+          <button class="btn-icon" id="newFileBtn" title="新建文件">+</button>
+          <button class="btn-icon" id="newFolderBtn" title="新建目录">📁</button>
+          <button class="btn-icon" id="refreshBtn" title="刷新">↻</button>
+        </div>
+      </div>
+
+      <div class="modified-indicator" id="modifiedIndicator" style="display: none;">
+        <div class="modified-summary">
+          <span class="modified-count">0</span> 个文件待部署
+          <button class="btn-icon-small" id="toggleChanges" title="查看详情">▼</button>
+        </div>
+        <button class="btn-deploy" id="deployBtn">部署</button>
+      </div>
+
+      <div class="changes-list" id="changesList" style="display: none;"></div>
+
+      <div class="file-tree" id="fileTree"></div>
+    </aside>
+
+    <!-- 主编辑区 -->
+    <main class="main">
+      <div class="editor-header">
+        <span class="file-path" id="filePath">未选择文件</span>
+        <div class="editor-actions">
+          <button class="btn" id="previewToggle">预览</button>
+          <button class="btn btn-primary" id="saveBtn" disabled>保存</button>
+        </div>
+      </div>
+
+      <div class="editor-container">
+        <div class="editor-wrapper" id="editorWrapper">
+          <textarea id="editor" placeholder="选择或创建一个文件开始编辑..."></textarea>
+        </div>
+
+        <div class="preview-wrapper" id="previewWrapper" style="display: none;">
+          <div id="preview" class="markdown-preview"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 新建文件对话框 -->
+  <dialog class="dialog" id="newFileDialog">
+    <form method="dialog">
+      <h3>新建文件</h3>
+      <input type="text" id="newFileName" placeholder="文件名.md" required>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="cancelNewFile">取消</button>
+        <button type="submit" class="btn btn-primary">创建</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 重命名对话框 -->
+  <dialog class="dialog" id="renameDialog">
+    <form method="dialog">
+      <h3>重命名</h3>
+      <input type="text" id="renameInput" placeholder="新名称" required>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="cancelRename">取消</button>
+        <button type="submit" class="btn btn-primary">确定</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 上传文件对话框 -->
+  <dialog class="dialog" id="uploadDialog">
+    <form method="dialog">
+      <div class="dialog-header-row">
+        <h3>上传文件</h3>
+        <button type="button" class="btn-icon-api" id="apiInfoBtn" title="API 调用">🔌</button>
+      </div>
+
+      <!-- API 调用说明 -->
+      <div class="api-info" id="apiInfo" style="display: none;">
+        <p class="api-title">外部 API 调用</p>
+        <div class="api-endpoint">
+          <label>上传接口：</label>
+          <code id="apiUrl">http://110.40.142.210/editor/api/upload</code>
+          <button type="button" class="btn-copy" onclick="copyApiUrl()">复制</button>
+        </div>
+        <div class="api-example">
+          <label>JSON 方式：</label>
+          <pre id="apiCurl">curl -X POST http://110.40.142.210/editor/api/upload \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "guide/example.md",
+    "content": "# 新文档\n\n内容..."
+  }'</pre>
+          <button type="button" class="btn-copy" onclick="copyApiCurl()">复制</button>
+        </div>
+        <div class="api-example">
+          <label>文件上传方式：</label>
+          <pre id="apiFileCurl">curl -X POST http://110.40.142.210/editor/api/upload/file \
+  -F "file=@/path/to/document.md" \
+  -F "path=guide"</pre>
+          <button type="button" class="btn-copy" onclick="copyApiFileCurl()">复制</button>
+        </div>
+      </div>
+
+      <div class="upload-area" id="uploadArea">
+        <p>拖拽文件到此处或点击选择</p>
+        <input type="file" id="fileInput" multiple accept=".md,.txt" style="display: none;">
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="cancelUpload">取消</button>
+        <button type="button" class="btn btn-primary" id="confirmUpload">上传</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <script src="app.js?v=5"></script>
+</body>
+</html>

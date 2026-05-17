@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "node scripts/watch-and-deploy.cjs",
+    "editor": "node scripts/editor-server.cjs",
     "docs:serve": "node scripts/serve.cjs",
     "docs:watch": "node scripts/watch-and-build.cjs",
     "docs:start": "npm run build && concurrently \"npm run docs:serve\" \"npm run docs:watch\""
@@ -86,8 +87,10 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "express": "^4.22.2",
     "globals": "^16.5.0",
     "kimi-plugin-inspect-react": "^1.0.3",
+    "multer": "^2.1.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
     "tailwindcss-animate": "^1.0.7",
