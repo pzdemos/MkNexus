@@ -130,8 +130,22 @@ marked.setOptions({
 
 // ==================== 文件操作 ====================
 
+// 显示文件树骨架屏
+function showTreeSkeleton() {
+  fileTree.innerHTML = `
+    <div class="skeleton-tree">
+      ${Array(8).fill(0).map(() => `
+        <div class="skeleton-tree-item">
+          <div class="skeleton skeleton-icon"></div>
+          <div class="skeleton skeleton-text ${['skeleton-text-sm', 'skeleton-text-md', 'skeleton-text-lg'][Math.floor(Math.random() * 3)]}"></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 async function loadFiles() {
-  showLoading();
+  showTreeSkeleton();
   try {
     const res = await fetch(`${API}/api/files`);
     const data = await res.json();
@@ -142,9 +156,14 @@ async function loadFiles() {
     updateModifiedIndicator();
     renderChangesList();
   } catch (error) {
+    fileTree.innerHTML = `
+      <div class="sidebar-empty">
+        <i data-lucide="alert-circle"></i>
+        <p>加载失败: ${error.message}</p>
+      </div>
+    `;
+    lucide.createIcons({ root: fileTree });
     toast('加载文件失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
   }
 }
 
@@ -197,18 +216,48 @@ async function openFile(path) {
   currentDir = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
   filePathEl.textContent = path;
   saveBtn.disabled = false;
-  showLoading();
+
+  // 显示编辑器骨架屏
+  const editorWrapper = document.getElementById('editorWrapper');
+  const originalEditorHTML = editorWrapper.innerHTML;
+  editorWrapper.innerHTML = `
+    <div class="skeleton-editor">
+      <div class="skeleton skeleton-title"></div>
+      <div class="skeleton skeleton-line skeleton-line-1"></div>
+      <div class="skeleton skeleton-line skeleton-line-2"></div>
+      <div class="skeleton skeleton-line skeleton-line-3"></div>
+      <div class="skeleton skeleton-line skeleton-line-4"></div>
+      <div class="skeleton skeleton-line skeleton-line-5"></div>
+      <div class="skeleton skeleton-line skeleton-line-6"></div>
+      <div class="skeleton skeleton-line skeleton-line-1"></div>
+      <div class="skeleton skeleton-line skeleton-line-2"></div>
+      <div class="skeleton skeleton-line skeleton-line-3"></div>
+    </div>
+  `;
 
   try {
     const res = await fetch(`${API}/api/file/${encodeURIComponent(path)}`);
     const data = await res.json();
-    editor.value = data.content;
+
+    // 恢复编辑器并设置内容
+    editorWrapper.innerHTML = originalEditorHTML;
+    const restoredEditor = document.getElementById('editor');
+    restoredEditor.value = data.content;
+
+    // 重新绑定事件监听器
+    restoredEditor.addEventListener('input', updatePreview);
+
     updatePreview();
     renderFileTree();
   } catch (error) {
+    editorWrapper.innerHTML = `
+      <div class="sidebar-empty" style="height: 100%;">
+        <i data-lucide="alert-circle"></i>
+        <p>打开文件失败: ${error.message}</p>
+      </div>
+    `;
+    lucide.createIcons({ root: editorWrapper });
     toast('打开文件失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
   }
 }
 
