@@ -21,13 +21,76 @@ const modifiedIndicator = document.getElementById('modifiedIndicator');
 const modifiedCount = document.querySelector('.modified-count');
 const newFileDialog = document.getElementById('newFileDialog');
 const newFileNameInput = document.getElementById('newFileName');
+const newFolderDialog = document.getElementById('newFolderDialog');
+const newFolderNameInput = document.getElementById('newFolderName');
 const renameDialog = document.getElementById('renameDialog');
 const renameInput = document.getElementById('renameInput');
 const uploadDialog = document.getElementById('uploadDialog');
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
+const confirmUploadBtn = document.getElementById('confirmUpload');
 const apiInfoBtn = document.getElementById('apiInfoBtn');
 const apiInfo = document.getElementById('apiInfo');
+
+// 确认对话框
+const confirmDialog = document.getElementById('confirmDialog');
+const confirmTitle = document.getElementById('confirmTitle');
+const confirmMessage = document.getElementById('confirmMessage');
+const confirmOk = document.getElementById('confirmOk');
+const confirmCancel = document.getElementById('confirmCancel');
+
+function showConfirm(title, message) {
+  return new Promise(resolve => {
+    confirmTitle.textContent = title;
+    confirmMessage.textContent = message;
+    confirmOk.onclick = () => { confirmDialog.close(); resolve(true); };
+    confirmCancel.onclick = () => { confirmDialog.close(); resolve(false); };
+    confirmDialog.showModal();
+  });
+}
+
+confirmDialog.addEventListener('click', (e) => {
+  if (e.target === confirmDialog) {
+    confirmDialog.close();
+  }
+});
+
+// Toast 通知
+function toast(message, type = 'info', duration = 3000) {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = message;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('toast-remove');
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+// 加载状态
+let loadingCount = 0;
+
+function showLoading() {
+  loadingCount++;
+  if (loadingCount === 1) {
+    const overlay = document.createElement('div');
+    overlay.className = 'loading-overlay';
+    overlay.id = 'loadingOverlay';
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+    overlay.appendChild(spinner);
+    document.querySelector('.main').appendChild(overlay);
+  }
+}
+
+function hideLoading() {
+  loadingCount = Math.max(0, loadingCount - 1);
+  if (loadingCount === 0) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.remove();
+  }
+}
 
 // 动态设置 API URL
 const currentApiUrl = window.location.origin + '/editor/api/upload';
@@ -57,6 +120,7 @@ marked.setOptions({
 // ==================== 文件操作 ====================
 
 async function loadFiles() {
+  showLoading();
   try {
     const res = await fetch(`${API}/api/files`);
     const data = await res.json();
@@ -67,7 +131,9 @@ async function loadFiles() {
     updateModifiedIndicator();
     renderChangesList();
   } catch (error) {
-    console.error('加载文件失败:', error);
+    toast('加载文件失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
@@ -118,6 +184,7 @@ async function openFile(path) {
   currentDir = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
   filePathEl.textContent = path;
   saveBtn.disabled = false;
+  showLoading();
 
   try {
     const res = await fetch(`${API}/api/file/${encodeURIComponent(path)}`);
@@ -126,12 +193,15 @@ async function openFile(path) {
     updatePreview();
     renderFileTree();
   } catch (error) {
-    console.error('打开文件失败:', error);
+    toast('打开文件失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
 async function saveFile() {
   if (!currentFile) return;
+  showLoading();
 
   try {
     const res = await fetch(`${API}/api/file/${encodeURIComponent(currentFile)}`, {
@@ -143,22 +213,27 @@ async function saveFile() {
     const data = await res.json();
 
     if (data.unchanged) {
-      console.log('文件未改动，跳过保存');
+      hideLoading();
       return;
     }
 
     await loadFiles();
     showSaveSuccess();
+    toast('已保存', 'success', 1500);
   } catch (error) {
-    console.error('保存失败:', error);
+    toast('保存失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
 async function deleteFile(path, event) {
   event.stopPropagation();
 
-  if (!confirm(`确定要删除 ${path} 吗？`)) return;
+  const confirmed = await showConfirm('删除文件', `确定要删除 ${path} 吗？此操作不可撤销。`);
+  if (!confirmed) return;
 
+  showLoading();
   try {
     await fetch(`${API}/api/file/${encodeURIComponent(path)}`, {
       method: 'DELETE',
@@ -166,14 +241,18 @@ async function deleteFile(path, event) {
 
     if (currentFile === path) {
       currentFile = null;
+      currentDir = '';
       editor.value = '';
       filePathEl.textContent = '未选择文件';
       saveBtn.disabled = true;
     }
 
     await loadFiles();
+    toast('已删除: ' + path, 'success', 2000);
   } catch (error) {
-    console.error('删除失败:', error);
+    toast('删除失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
@@ -192,6 +271,7 @@ async function renameItemConfirm() {
 
   if (!newName) return;
 
+  showLoading();
   try {
     const res = await fetch(`${API}/api/rename/${encodeURIComponent(path)}`, {
       method: 'POST',
@@ -207,8 +287,11 @@ async function renameItemConfirm() {
     }
 
     renameDialog.close();
+    toast('已重命名', 'success', 1500);
   } catch (error) {
-    console.error('重命名失败:', error);
+    toast('重命名失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
@@ -217,16 +300,13 @@ async function createFile() {
   if (!name) return;
 
   if (!name.endsWith('.md')) {
-    alert('文件名必须以 .md 结尾');
+    toast('文件名必须以 .md 结尾', 'warning');
     return;
   }
 
-  const dir = currentFile && !currentFile.endsWith('.md')
-    ? currentFile
-    : '';
-
+  showLoading();
   try {
-    const res = await fetch(`${API}/api/new/${encodeURIComponent(dir)}`, {
+    const res = await fetch(`${API}/api/new/${encodeURIComponent(currentDir)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
@@ -237,75 +317,93 @@ async function createFile() {
     openFile(data.path);
     newFileDialog.close();
     newFileNameInput.value = '';
+    toast('已创建: ' + name, 'success', 1500);
   } catch (error) {
-    console.error('创建文件失败:', error);
+    toast('创建文件失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
 async function createFolder() {
-  const name = prompt('请输入目录名:');
+  newFolderNameInput.value = '';
+  newFolderDialog.showModal();
+}
+
+async function createFolderConfirm() {
+  const name = newFolderNameInput.value.trim();
   if (!name) return;
 
-  const dir = currentFile && !currentFile.endsWith('.md')
-    ? currentFile
-    : '';
-
+  showLoading();
   try {
-    await fetch(`${API}/api/folder/${encodeURIComponent(dir)}`, {
+    await fetch(`${API}/api/folder/${encodeURIComponent(currentDir)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
 
     await loadFiles();
+    newFolderDialog.close();
+    newFolderNameInput.value = '';
+    toast('已创建目录: ' + name, 'success', 1500);
   } catch (error) {
-    console.error('创建目录失败:', error);
+    toast('创建目录失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
 async function uploadFiles(fileList) {
-  const dir = currentFile && !currentFile.endsWith('.md')
-    ? currentFile
-    : '';
+  showLoading();
+  let uploaded = 0;
+  let skipped = 0;
 
   for (const file of fileList) {
     if (!file.name.endsWith('.md') && !file.name.endsWith('.txt')) {
-      alert(`跳过不支持的文件: ${file.name}`);
+      skipped++;
       continue;
     }
 
     try {
       const content = await file.text();
 
-      await fetch(`${API}/api/new/${encodeURIComponent(dir)}`, {
+      await fetch(`${API}/api/new/${encodeURIComponent(currentDir)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: file.name }),
       });
 
-      const newPath = dir ? `${dir}/${file.name}` : file.name;
+      const newPath = currentDir ? `${currentDir}/${file.name}` : file.name;
 
       await fetch(`${API}/api/file/${encodeURIComponent(newPath)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
       });
+      uploaded++;
     } catch (error) {
-      console.error(`上传 ${file.name} 失败:`, error);
+      toast(`上传 ${file.name} 失败: ${error.message}`, 'error');
     }
   }
 
   await loadFiles();
+  hideLoading();
   uploadDialog.close();
+
+  if (uploaded > 0) {
+    toast(`成功上传 ${uploaded} 个文件` + (skipped > 0 ? `，跳过 ${skipped} 个` : ''), 'success', 2000);
+  }
 }
 
 async function moveItem(itemPath, targetDir) {
+  showLoading();
   try {
     const fileName = itemPath.split('/').pop();
-    const currentDir = itemPath.includes('/') ? itemPath.substring(0, itemPath.lastIndexOf('/')) : '';
+    const oldDir = itemPath.includes('/') ? itemPath.substring(0, itemPath.lastIndexOf('/')) : '';
     const newPath = targetDir ? `${targetDir}/${fileName}` : fileName;
 
-    if (currentDir === targetDir) {
+    if (oldDir === targetDir) {
+      hideLoading();
       return;
     }
 
@@ -338,26 +436,34 @@ async function moveItem(itemPath, targetDir) {
     if (currentFile === itemPath) {
       openFile(newPath);
     }
+
+    toast('已移动', 'success', 1500);
   } catch (error) {
-    console.error('移动失败:', error);
+    toast('移动失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
 async function deploy() {
   if (modified.length === 0) return;
 
-  if (!confirm(`确定要部署 ${modified.length} 个文件吗？这将触发自动构建部署。`)) return;
+  const confirmed = await showConfirm('部署文件', `确定要部署 ${modified.length} 个文件吗？这将把修改同步到正式目录。`);
+  if (!confirmed) return;
 
+  showLoading();
   try {
     const res = await fetch(`${API}/api/deploy`, { method: 'POST' });
     const data = await res.json();
 
     if (data.success) {
-      alert(data.message);
       await loadFiles();
+      toast(data.message, 'success', 3000);
     }
   } catch (error) {
-    console.error('部署失败:', error);
+    toast('部署失败: ' + error.message, 'error');
+  } finally {
+    hideLoading();
   }
 }
 
@@ -451,35 +557,33 @@ function showSaveSuccess() {
 
 // ==================== API 复制功能 ====================
 
-function copyApiUrl() {
-  const apiUrl = document.getElementById('apiUrl').textContent;
-  navigator.clipboard.writeText(apiUrl).then(() => {
-    const btn = event.target;
+function copyText(text, btn) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
     const originalText = btn.textContent;
     btn.textContent = '已复制';
     setTimeout(() => btn.textContent = originalText, 1500);
-  });
+  } catch (e) {
+    console.error('复制失败:', e);
+  }
+  document.body.removeChild(ta);
 }
 
-function copyApiCurl() {
-  const apiCurl = document.getElementById('apiCurl').textContent;
-  navigator.clipboard.writeText(apiCurl).then(() => {
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '已复制';
-    setTimeout(() => btn.textContent = originalText, 1500);
+document.querySelectorAll('.btn-copy').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetId = btn.dataset.copy;
+    const source = document.getElementById(targetId);
+    if (source) {
+      copyText(source.textContent, btn);
+    }
   });
-}
-
-function copyApiFileCurl() {
-  const apiFileCurl = document.getElementById('apiFileCurl').textContent;
-  navigator.clipboard.writeText(apiFileCurl).then(() => {
-    const btn = event.target;
-    const originalText = btn.textContent;
-    btn.textContent = '已复制';
-    setTimeout(() => btn.textContent = originalText, 1500);
-  });
-}
+});
 
 // ==================== 拖动功能 ====================
 
@@ -530,7 +634,7 @@ function handleDrop(e) {
   const targetType = target.dataset.type;
 
   if (targetType !== 'folder') {
-    alert('只能移动到文件夹中');
+    toast('只能移动到文件夹中', 'warning');
     return;
   }
 
@@ -570,7 +674,7 @@ document.getElementById('newFileBtn').addEventListener('click', () => {
   newFileDialog.showModal();
 });
 
-document.getElementById('newFolderBtn').addEventListener('click', createFolder);
+document.getElementById('newFolderBtn').addEventListener('click', () => newFolderDialog.showModal());
 
 document.getElementById('refreshBtn').addEventListener('click', loadFiles);
 
@@ -610,12 +714,26 @@ document.getElementById('cancelRename').addEventListener('click', () => {
   renameDialog.close();
 });
 
+newFolderDialog.addEventListener('submit', (e) => {
+  e.preventDefault();
+  createFolderConfirm();
+});
+
+document.getElementById('cancelNewFolder').addEventListener('click', () => {
+  newFolderDialog.close();
+  newFolderNameInput.value = '';
+});
+
 apiInfoBtn.addEventListener('click', () => {
   apiInfo.style.display = apiInfo.style.display === 'none' ? 'block' : 'none';
 });
 
 document.getElementById('cancelUpload').addEventListener('click', () => {
   uploadDialog.close();
+});
+
+confirmUploadBtn.addEventListener('click', () => {
+  fileInput.click();
 });
 
 uploadArea.addEventListener('click', () => {
@@ -655,24 +773,17 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// 添加上传按钮到侧边栏
-const uploadBtn = document.createElement('button');
-uploadBtn.className = 'btn-icon';
-uploadBtn.id = 'uploadBtn';
-uploadBtn.title = '上传文件';
-uploadBtn.textContent = '📤';
-uploadBtn.addEventListener('click', () => {
+// 上传按钮事件
+document.getElementById('uploadBtn').addEventListener('click', () => {
   uploadDialog.showModal();
 });
-document.querySelector('.sidebar-actions').appendChild(uploadBtn);
 
 // 将函数暴露到全局作用域
 window.openFile = openFile;
 window.deleteFile = deleteFile;
 window.renameItem = renameItem;
-window.copyApiUrl = copyApiUrl;
-window.copyApiCurl = copyApiCurl;
-window.copyApiFileCurl = copyApiFileCurl;
+window.copyText = copyText;
+window.toast = toast;
 
 // 初始化
 loadFiles();
