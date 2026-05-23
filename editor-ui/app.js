@@ -171,6 +171,7 @@ function renderTreeItems(items, level = 0) {
              draggable="true">
           <span class="tree-icon">📄</span>
           <span class="tree-name">${item.name}</span>
+          <span class="tree-open" title="打开">👁️</span>
           <span class="tree-rename">✎</span>
           <span class="tree-delete">✕</span>
         </div>
@@ -591,6 +592,7 @@ function attachDragEvents() {
   const items = document.querySelectorAll('.tree-item');
 
   items.forEach(item => {
+    // Desktop HTML5 drag
     item.addEventListener('dragstart', handleDragStart);
     item.addEventListener('dragend', handleDragEnd);
     item.addEventListener('dragover', handleDragOver);
@@ -598,6 +600,8 @@ function attachDragEvents() {
     item.addEventListener('drop', handleDrop);
   });
 }
+
+// --- Desktop Drag and Drop ---
 
 function handleDragStart(e) {
   draggedItem = e.target.closest('.tree-item');
@@ -642,9 +646,121 @@ function handleDrop(e) {
   target.classList.remove('drag-over');
 }
 
+// --- Mobile Touch Drag (triggered only on .tree-icon, no passive:false until drag starts) ---
+
+let touchDraggedItem = null;
+let touchGhost = null;
+let longPressTimer = null;
+let longPressActive = false;
+let onDragMove = null;
+let onDragEnd = null;
+const LONG_PRESS_MS = 400;
+
+fileTree.addEventListener('touchstart', e => {
+  const icon = e.target.closest('.tree-icon');
+  if (!icon) return;
+
+  longPressActive = false;
+  const item = icon.closest('.tree-item');
+  if (!item) return;
+
+  longPressTimer = setTimeout(() => {
+    longPressActive = true;
+    touchMoved = true;
+    touchDraggedItem = item;
+    item.classList.add('dragging');
+
+    const rect = item.getBoundingClientRect();
+    touchGhost = item.cloneNode(true);
+    touchGhost.style.position = 'fixed';
+    touchGhost.style.width = rect.width + 'px';
+    touchGhost.style.opacity = '0.85';
+    touchGhost.style.pointerEvents = 'none';
+    touchGhost.style.zIndex = '9999';
+    touchGhost.style.background = 'var(--text-primary)';
+    touchGhost.style.color = 'var(--bg-primary)';
+    touchGhost.style.borderRadius = 'var(--radius-md)';
+    touchGhost.style.boxShadow = 'var(--shadow-lg)';
+    touchGhost.style.transform = 'scale(1.05)';
+    document.body.appendChild(touchGhost);
+
+    const touch = e.touches[0];
+    touchGhost.style.left = (touch.clientX - rect.width / 2) + 'px';
+    touchGhost.style.top = (touch.clientY - 30) + 'px';
+
+    if (navigator.vibrate) navigator.vibrate(10);
+
+    // Only now bind the blocking listeners (no impact on scrolling until drag)
+    onDragMove = ev => {
+      ev.preventDefault();
+      const t = ev.touches[0];
+      if (touchGhost) {
+        touchGhost.style.left = (t.clientX - touchGhost.offsetWidth / 2) + 'px';
+        touchGhost.style.top = (t.clientY - 30) + 'px';
+      }
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+      const target = el?.closest('.tree-item[data-type="folder"]');
+      document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+      if (target && target !== touchDraggedItem) target.classList.add('drag-over');
+    };
+
+    onDragEnd = ev => {
+      clearTimeout(longPressTimer);
+      if (!longPressActive) return;
+      const t = ev.changedTouches[0];
+      requestAnimationFrame(() => {
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        const target = el?.closest('.tree-item[data-type="folder"]');
+        if (target && target !== touchDraggedItem) {
+          moveItem(touchDraggedItem.dataset.path, target.dataset.path);
+        }
+        touchDraggedItem?.classList.remove('dragging');
+        document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+        if (touchGhost) { touchGhost.remove(); touchGhost = null; }
+        touchDraggedItem = null;
+        longPressActive = false;
+      });
+      document.removeEventListener('touchmove', onDragMove, { passive: false });
+      document.removeEventListener('touchend', onDragEnd);
+      document.removeEventListener('touchcancel', onDragEnd);
+    };
+
+    document.addEventListener('touchmove', onDragMove, { passive: false });
+    document.addEventListener('touchend', onDragEnd);
+    document.addEventListener('touchcancel', onDragEnd);
+  }, LONG_PRESS_MS);
+}, { passive: true });
+
+// Track touch movement to prevent click on scroll
+let touchStartY = 0;
+let touchMoved = false;
+
+fileTree.addEventListener('touchstart', e => {
+  touchStartY = e.touches[0].clientY;
+  touchMoved = false;
+}, { passive: true });
+
+fileTree.addEventListener('touchmove', e => {
+  if (!longPressActive) clearTimeout(longPressTimer);
+  if (Math.abs(e.touches[0].clientY - touchStartY) > 10) {
+    touchMoved = true;
+  }
+}, { passive: true });
+
+fileTree.addEventListener('touchend', () => {
+  if (!longPressActive) clearTimeout(longPressTimer);
+}, { passive: true });
+fileTree.addEventListener('touchcancel', () => {
+  if (!longPressActive) clearTimeout(longPressTimer);
+}, { passive: true });
+
+fileTree.addEventListener('contextmenu', e => e.preventDefault());
+
 // ==================== 事件监听 ====================
 
 fileTree.addEventListener('click', (e) => {
+  if (touchMoved) return;
+
   if (e.target.classList.contains('tree-delete')) {
     e.stopPropagation();
     const item = e.target.closest('.tree-item');
@@ -664,9 +780,13 @@ fileTree.addEventListener('click', (e) => {
     return;
   }
 
-  const item = e.target.closest('.tree-item');
-  if (item && item.dataset.type === 'file') {
-    openFile(item.dataset.path);
+  if (e.target.classList.contains('tree-open')) {
+    e.stopPropagation();
+    const item = e.target.closest('.tree-item');
+    if (item && item.dataset.type === 'file') {
+      openFile(item.dataset.path);
+    }
+    return;
   }
 });
 
