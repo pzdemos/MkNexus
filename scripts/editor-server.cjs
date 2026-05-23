@@ -265,8 +265,11 @@ app.post('/api/folder/:path(*)', (req, res) => {
     const basePath = req.params.path || '';
     const { name } = req.body;
 
-    const fullPath = path.join(TEMP_DIR, basePath, name);
-    fs.mkdirSync(fullPath, { recursive: true });
+    // 同时创建到正式目录和临时目录，确保立即可见
+    const tempPath = path.join(TEMP_DIR, basePath, name);
+    const docPath = path.join(DOCS_DIR, basePath, name);
+    fs.mkdirSync(tempPath, { recursive: true });
+    fs.mkdirSync(docPath, { recursive: true });
 
     res.json({ success: true });
   } catch (error) {

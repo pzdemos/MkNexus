@@ -53,6 +53,7 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   font-size: 15px;
   line-height: 1.6;
@@ -66,11 +67,14 @@ body {
 /* ==================== Sidebar ==================== */
 .sidebar {
   width: 300px;
+  min-height: 0;
+  height: 100%;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
 }
 
 .sidebar::before {
@@ -274,8 +278,10 @@ body {
 /* File Tree */
 .file-tree {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--space-md);
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-md) var(--space-md) 120px;
   position: relative;
   z-index: 1;
 }
@@ -288,6 +294,8 @@ body {
   border-radius: var(--radius-md);
   font-size: 14px;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   transition: all 0.15s ease;
   margin-bottom: 2px;
   position: relative;
@@ -341,7 +349,8 @@ body {
 }
 
 .tree-delete,
-.tree-rename {
+.tree-rename,
+.tree-open {
   opacity: 0;
   margin-left: var(--space-sm);
   padding: 2px 6px;
@@ -359,8 +368,14 @@ body {
   color: var(--accent);
 }
 
+.tree-open {
+  color: var(--success);
+  font-size: 12px;
+}
+
 .tree-item:hover .tree-delete,
-.tree-item:hover .tree-rename {
+.tree-item:hover .tree-rename,
+.tree-item:hover .tree-open {
   opacity: 1;
 }
 
@@ -370,6 +385,19 @@ body {
 
 .tree-rename:hover {
   background: var(--accent-light);
+}
+
+.tree-open:hover {
+  background: var(--accent-light);
+}
+
+/* Always show action buttons on touch devices */
+@media (hover: none) {
+  .tree-delete,
+  .tree-rename,
+  .tree-open {
+    opacity: 0.6;
+  }
 }
 
 /* Drag & Drop States */
@@ -390,6 +418,7 @@ body {
 /* ==================== Main Editor Area ==================== */
 .main {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-primary);
@@ -468,6 +497,7 @@ body {
 /* Editor Container */
 .editor-container {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow: hidden;
   position: relative;
