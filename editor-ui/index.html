@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-height=initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MkNexus — Editorial Workspace</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -16,6 +16,7 @@
           <button class="btn-icon" id="newFileBtn" title="新建文件">+</button>
           <button class="btn-icon" id="newFolderBtn" title="新建目录">📁</button>
           <button class="btn-icon" id="refreshBtn" title="刷新">↻</button>
+          <button class="btn-icon" id="uploadBtn" title="上传文件">📤</button>
         </div>
       </div>
 
@@ -78,6 +79,18 @@
     </form>
   </dialog>
 
+  <!-- 新建目录对话框 -->
+  <dialog class="dialog" id="newFolderDialog">
+    <form method="dialog">
+      <h3>新建目录</h3>
+      <input type="text" id="newFolderName" placeholder="目录名" required>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="cancelNewFolder">取消</button>
+        <button type="submit" class="btn btn-primary">创建</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- 上传文件对话框 -->
   <dialog class="dialog" id="uploadDialog">
     <form method="dialog">
@@ -92,7 +105,7 @@
         <div class="api-endpoint">
           <label>上传接口：</label>
           <code id="apiUrl">http://110.40.142.210/editor/api/upload</code>
-          <button type="button" class="btn-copy" onclick="copyApiUrl()">复制</button>
+          <button type="button" class="btn-copy" data-copy="apiUrl">复制</button>
         </div>
         <div class="api-example">
           <label>JSON 方式：</label>
@@ -102,14 +115,14 @@
     "path": "guide/example.md",
     "content": "# 新文档\n\n内容..."
   }'</pre>
-          <button type="button" class="btn-copy" onclick="copyApiCurl()">复制</button>
+          <button type="button" class="btn-copy" data-copy="apiCurl">复制</button>
         </div>
         <div class="api-example">
           <label>文件上传方式：</label>
           <pre id="apiFileCurl">curl -X POST http://110.40.142.210/editor/api/upload/file \
   -F "file=@/path/to/document.md" \
   -F "path=guide"</pre>
-          <button type="button" class="btn-copy" onclick="copyApiFileCurl()">复制</button>
+          <button type="button" class="btn-copy" data-copy="apiFileCurl">复制</button>
         </div>
       </div>
 
@@ -124,9 +137,22 @@
     </form>
   </dialog>
 
+  <!-- Toast 通知容器 -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- 确认对话框 -->
+  <dialog class="dialog dialog-confirm" id="confirmDialog">
+    <h3 id="confirmTitle">确认</h3>
+    <p id="confirmMessage"></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="confirmCancel">取消</button>
+      <button type="button" class="btn btn-primary btn-danger" id="confirmOk">确定</button>
+    </div>
+  </dialog>
+
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

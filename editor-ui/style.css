@@ -817,3 +817,104 @@ body {
 .btn-copy:hover {
   background: var(--accent);
 }
+
+.btn-danger {
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+  color: white !important;
+}
+
+.btn-danger:hover {
+  background: #b04838 !important;
+  border-color: #b04838 !important;
+}
+
+.dialog-confirm {
+  max-width: 360px;
+  text-align: center;
+}
+
+.dialog-confirm h3 {
+  margin-bottom: var(--space-md);
+}
+
+.dialog-confirm p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-xl);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dialog-confirm .dialog-actions {
+  justify-content: center;
+}
+
+/* ==================== Toast Notifications ==================== */
+.toast-container {
+  position: fixed;
+  bottom: var(--space-xl);
+  right: var(--space-xl);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  font-family: 'Crimson Pro', serif;
+  font-size: 14px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  animation: toastIn 0.3s ease;
+  pointer-events: auto;
+  max-width: 360px;
+}
+
+.toast.toast-success { background: var(--success); }
+.toast.toast-error { background: var(--danger); }
+.toast.toast-warning { background: var(--warning); color: var(--text-primary); }
+
+.toast-remove {
+  animation: toastOut 0.3s ease forwards;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
+}
+
+/* ==================== Loading Spinner ==================== */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(247, 244, 239, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
