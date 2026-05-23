@@ -4,26 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MkNexus — Editorial Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://www.haoaiganfan.top/libs/lucide.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Background Effects -->
+  <div class="bg-gradient"></div>
+  <div class="bg-shape shape-a"></div>
+  <div class="bg-shape shape-b"></div>
+
   <div id="app">
     <!-- 左侧文件列表 -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>📁 文档</h2>
+        <h2>文档</h2>
         <div class="sidebar-actions">
-          <button class="btn-icon" id="newFileBtn" title="新建文件">+</button>
-          <button class="btn-icon" id="newFolderBtn" title="新建目录">📁</button>
-          <button class="btn-icon" id="refreshBtn" title="刷新">↻</button>
-          <button class="btn-icon" id="uploadBtn" title="上传文件">📤</button>
+          <button class="btn-icon" id="newFileBtn" title="新建文件"><i data-lucide="plus"></i></button>
+          <button class="btn-icon" id="newFolderBtn" title="新建目录"><i data-lucide="folder-open"></i></button>
+          <button class="btn-icon" id="refreshBtn" title="刷新"><i data-lucide="refresh-ccw"></i></button>
+          <button class="btn-icon" id="uploadBtn" title="上传文件"><i data-lucide="upload"></i></button>
         </div>
       </div>
 
       <div class="modified-indicator" id="modifiedIndicator" style="display: none;">
         <div class="modified-summary">
           <span class="modified-count">0</span> 个文件待部署
-          <button class="btn-icon-small" id="toggleChanges" title="查看详情">▼</button>
+          <button class="btn-icon-small" id="toggleChanges" title="查看详情"><i data-lucide="chevron-down"></i></button>
         </div>
         <button class="btn-deploy" id="deployBtn">部署</button>
       </div>
@@ -96,10 +105,9 @@
     <form method="dialog">
       <div class="dialog-header-row">
         <h3>上传文件</h3>
-        <button type="button" class="btn-icon-api" id="apiInfoBtn" title="API 调用">🔌</button>
+        <button type="button" class="btn-icon-api" id="apiInfoBtn" title="API 调用"><i data-lucide="code"></i></button>
       </div>
 
-      <!-- API 调用说明 -->
       <div class="api-info" id="apiInfo" style="display: none;">
         <p class="api-title">外部 API 调用</p>
         <div class="api-endpoint">
@@ -113,7 +121,8 @@
   -H "Content-Type: application/json" \
   -d '{
     "path": "guide/example.md",
-    "content": "# 新文档\n\n内容..."
+    "content": "# 新文档\n\n内容...",
+    "deploy": true
   }'</pre>
           <button type="button" class="btn-copy" data-copy="apiCurl">复制</button>
         </div>
@@ -151,8 +160,8 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
-  <script src="app.js?v=17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="app.js?v=18"></script>
 </body>
 </html>

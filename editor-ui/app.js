@@ -58,10 +58,19 @@ confirmDialog.addEventListener('click', (e) => {
 // Toast 通知
 function toast(message, type = 'info', duration = 3000) {
   const container = document.getElementById('toastContainer');
+
+  const icons = {
+    success: '<i data-lucide="circle-check"></i>',
+    error: '<i data-lucide="alert-circle"></i>',
+    warning: '<i data-lucide="alert-triangle"></i>',
+    info: '<i data-lucide="info"></i>',
+  };
+
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.textContent = message;
+  el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span>${message}</span>`;
   container.appendChild(el);
+  lucide.createIcons({ root: el });
   setTimeout(() => {
     el.classList.add('toast-remove');
     setTimeout(() => el.remove(), 300);
@@ -100,11 +109,13 @@ if (document.getElementById('apiUrl')) {
   -H "Content-Type: application/json" \\
   -d '{
     "path": "guide/example.md",
-    "content": "# 新文档\\n\\n内容..."
+    "content": "# 新文档\\n\\n内容...",
+    "deploy": true
   }'`;
   document.getElementById('apiFileCurl').textContent = `curl -X POST ${currentApiUrl}/file \\
   -F "file=@/path/to/document.md" \\
-  -F "path=guide"`;
+  -F "path=guide" \\
+  -F "deploy=true"`;
 }
 
 // 初始化 marked
@@ -139,6 +150,7 @@ async function loadFiles() {
 
 function renderFileTree() {
   fileTree.innerHTML = renderTreeItems(files);
+  lucide.createIcons({ root: fileTree });
   attachDragEvents();
 }
 
@@ -154,9 +166,9 @@ function renderTreeItems(items, level = 0) {
              data-path="${item.path}"
              data-type="folder"
              draggable="true">
-          <span class="tree-icon">📁</span>
+          <span class="tree-icon"><i data-lucide="folder"></i></span>
           <span class="tree-name">${item.name}</span>
-          <span class="tree-rename">✎</span>
+          <span class="tree-rename"><i data-lucide="pencil"></i></span>
         </div>
         <div class="tree-children">
           ${item.children ? renderTreeItems(item.children, level + 1) : ''}
@@ -169,11 +181,11 @@ function renderTreeItems(items, level = 0) {
              data-path="${item.path}"
              data-type="file"
              draggable="true">
-          <span class="tree-icon">📄</span>
+          <span class="tree-icon"><i data-lucide="file"></i></span>
           <span class="tree-name">${item.name}</span>
-          <span class="tree-open" title="打开">👁️</span>
-          <span class="tree-rename">✎</span>
-          <span class="tree-delete">✕</span>
+          <span class="tree-open" title="打开"><i data-lucide="eye"></i></span>
+          <span class="tree-rename"><i data-lucide="pencil"></i></span>
+          <span class="tree-delete"><i data-lucide="x"></i></span>
         </div>
       `;
     }
@@ -486,10 +498,10 @@ function renderChangesList() {
   }
 
   const typeLabels = {
-    created: '+',
-    modified: '~',
-    deleted: '×',
-    moved: '→'
+    created: '<i data-lucide="plus"></i>',
+    modified: '<i data-lucide="pencil"></i>',
+    deleted: '<i data-lucide="x"></i>',
+    moved: '<i data-lucide="arrow-right"></i>'
   };
 
   const typeNames = {
@@ -505,6 +517,9 @@ function renderChangesList() {
       <span class="change-path">${change.path}</span>
     </div>
   `).join('');
+
+  // 初始化 Lucide 图标
+  lucide.createIcons({ root: changesList });
 }
 
 function toggleChanges() {
@@ -547,11 +562,12 @@ function togglePreview() {
 }
 
 function showSaveSuccess() {
-  const originalText = saveBtn.textContent;
-  saveBtn.textContent = '✓ 已保存';
+  const originalHTML = saveBtn.innerHTML;
+  saveBtn.innerHTML = '<i data-lucide="check"></i> 已保存';
+  lucide.createIcons({ root: saveBtn });
   saveBtn.style.background = 'var(--success)';
   setTimeout(() => {
-    saveBtn.textContent = originalText;
+    saveBtn.innerHTML = originalHTML;
     saveBtn.style.background = '';
   }, 1500);
 }
@@ -761,18 +777,22 @@ fileTree.addEventListener('contextmenu', e => e.preventDefault());
 fileTree.addEventListener('click', (e) => {
   if (touchMoved) return;
 
-  if (e.target.classList.contains('tree-delete')) {
+  const deleteBtn = e.target.closest('.tree-delete');
+  const renameBtn = e.target.closest('.tree-rename');
+  const openBtn = e.target.closest('.tree-open');
+
+  if (deleteBtn) {
     e.stopPropagation();
-    const item = e.target.closest('.tree-item');
+    const item = deleteBtn.closest('.tree-item');
     if (item) {
       deleteFile(item.dataset.path, e);
     }
     return;
   }
 
-  if (e.target.classList.contains('tree-rename')) {
+  if (renameBtn) {
     e.stopPropagation();
-    const item = e.target.closest('.tree-item');
+    const item = renameBtn.closest('.tree-item');
     if (item) {
       const type = item.dataset.type;
       renameItem(item.dataset.path, type, e);
@@ -780,9 +800,9 @@ fileTree.addEventListener('click', (e) => {
     return;
   }
 
-  if (e.target.classList.contains('tree-open')) {
+  if (openBtn) {
     e.stopPropagation();
-    const item = e.target.closest('.tree-item');
+    const item = openBtn.closest('.tree-item');
     if (item && item.dataset.type === 'file') {
       openFile(item.dataset.path);
     }
@@ -906,4 +926,5 @@ window.copyText = copyText;
 window.toast = toast;
 
 // 初始化
+lucide.createIcons();
 loadFiles();

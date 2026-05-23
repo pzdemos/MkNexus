@@ -349,10 +349,49 @@ app.delete('/api/file/:path(*)', (req, res) => {
   }
 });
 
+// 部署逻辑（可复用）
+function deployFiles() {
+  // 1. 复制临时文件到正式目录
+  const tempFiles = getTempFiles();
+
+  for (const file of tempFiles) {
+    const srcPath = path.join(TEMP_DIR, file);
+    const destPath = path.join(DOCS_DIR, file);
+    const destDir = path.dirname(destPath);
+
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    fs.copyFileSync(srcPath, destPath);
+  }
+
+  // 2. 处理删除列表
+  const deleteListPath = path.join(TEMP_DIR, '.delete-list');
+  if (fs.existsSync(deleteListPath)) {
+    const deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
+
+    for (const file of deleteList) {
+      const filePath = path.join(DOCS_DIR, file);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    fs.unlinkSync(deleteListPath);
+  }
+
+  // 3. 清空临时目录
+  fs.rmSync(TEMP_DIR, { recursive: true, force: true });
+  fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+  return tempFiles;
+}
+
 // 外部上传 API（供外部工具调用）
 app.post('/api/upload', (req, res) => {
   try {
-    const { path: filePath, content } = req.body;
+    const { path: filePath, content, deploy } = req.body;
 
     if (!filePath) {
       return res.status(400).json({ error: '缺少 path 参数' });
@@ -365,10 +404,16 @@ app.post('/api/upload', (req, res) => {
     // 保存到临时目录
     writeFile(filePath, content);
 
+    let deployed = null;
+    if (deploy) {
+      deployed = deployFiles();
+    }
+
     res.json({
       success: true,
-      message: '文件上传成功',
-      path: filePath
+      message: deployed ? '文件上传并部署成功' : '文件上传成功',
+      path: filePath,
+      deployed
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -398,11 +443,18 @@ app.post('/api/upload/file', upload.single('file'), (req, res) => {
     // 保存文件内容
     fs.writeFileSync(fullPath, req.file.buffer);
 
+    const deploy = req.body.deploy === 'true' || req.body.deploy === true;
+    let deployed = null;
+    if (deploy) {
+      deployed = deployFiles();
+    }
+
     res.json({
       success: true,
-      message: '文件上传成功',
+      message: deployed ? '文件上传并部署成功' : '文件上传成功',
       path: filePath,
-      fileName: fileName
+      fileName: fileName,
+      deployed
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -452,44 +504,11 @@ app.post('/api/move', (req, res) => {
 // 部署到正式目录
 app.post('/api/deploy', (req, res) => {
   try {
-    // 1. 复制临时文件到正式目录
-    const tempFiles = getTempFiles();
-
-    for (const file of tempFiles) {
-      const srcPath = path.join(TEMP_DIR, file);
-      const destPath = path.join(DOCS_DIR, file);
-      const destDir = path.dirname(destPath);
-
-      if (!fs.existsSync(destDir)) {
-        fs.mkdirSync(destDir, { recursive: true });
-      }
-
-      fs.copyFileSync(srcPath, destPath);
-    }
-
-    // 2. 处理删除列表
-    const deleteListPath = path.join(TEMP_DIR, '.delete-list');
-    if (fs.existsSync(deleteListPath)) {
-      const deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
-
-      for (const file of deleteList) {
-        const filePath = path.join(DOCS_DIR, file);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      }
-
-      fs.unlinkSync(deleteListPath);
-    }
-
-    // 3. 清空临时目录
-    fs.rmSync(TEMP_DIR, { recursive: true, force: true });
-    fs.mkdirSync(TEMP_DIR, { recursive: true });
-
+    const deployed = deployFiles();
     res.json({
       success: true,
-      message: `已部署 ${tempFiles.length} 个文件`,
-      deployed: tempFiles,
+      message: `已部署 ${deployed.length} 个文件`,
+      deployed,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
