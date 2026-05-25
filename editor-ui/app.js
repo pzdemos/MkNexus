@@ -1,5 +1,12 @@
-// API 基础地址
-const API = '';
+// API 基础地址 - 自动检测子路径部署
+function getApiBase() {
+  const pathname = window.location.pathname;
+  if (pathname.startsWith('/editor')) {
+    return '/editor';
+  }
+  return '';
+}
+const API = getApiBase();
 
 // 状态
 let currentFile = null;

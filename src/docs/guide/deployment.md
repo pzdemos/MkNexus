@@ -176,14 +176,40 @@ pm2 status mknexus-serve
 ### 本地命令
 
 ```bash
-# 启动监听部署
+# 启动所有服务（编辑器 + 监听部署）
+npm run start
+
+# 仅启动监听部署
 npm run deploy
+
+# 仅启动编辑器服务
+npm run editor
 
 # 手动构建
 npm run build
 
 # 手动部署
 rsync -avz --delete dist/ root@121.43.33.235:/var/server/MkNexus/dist/
+```
+
+### 后台运行（推荐）
+
+使用 screen 让服务在 SSH 断开后继续运行：
+
+```bash
+# 新建 screen 会话并启动服务
+cd /root/MkNexus
+screen -dmS mknexus bash -c "npm run start 2>&1 | tee -a /var/log/mknexus.log"
+
+# 查看所有会话
+screen -list
+
+# 重新连接会话（查看日志）
+screen -r mknexus
+# 按 Ctrl+A 再按 D 分离会话
+
+# 停止服务
+screen -X -S mknexus quit
 ```
 
 ### 远程命令
@@ -206,6 +232,8 @@ pm2 logs mknexus-serve
 
 | 环境 | 地址 | 说明 |
 |------|------|------|
+| 编辑器 (本机) | http://110.40.142.210/editor | Nginx 反向代理 |
+| 编辑器 (直连) | http://110.40.142.210:3535 | 端口直连 |
 | 本地开发 | http://localhost:3000 | Vite 开发服务器 |
 | 远程直连 | http://121.43.33.235:8080 | PM2 服务直连 |
 | 生产域名 | https://docs.haoaiganfan.top | Nginx 代理 |
