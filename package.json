@@ -12,7 +12,8 @@
     "editor": "node scripts/editor-server.cjs",
     "docs:serve": "node scripts/serve.cjs",
     "docs:watch": "node scripts/watch-and-build.cjs",
-    "docs:start": "npm run build && concurrently \"npm run docs:serve\" \"npm run docs:watch\""
+    "docs:start": "npm run build && concurrently \"npm run docs:serve\" \"npm run docs:watch\"",
+    "start": "concurrently \"npm run editor\" \"npm run deploy\""
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
