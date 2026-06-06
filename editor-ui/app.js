@@ -1,986 +1,428 @@
-// API 基础地址 - 自动检测子路径部署
-function getApiBase() {
-  const pathname = window.location.pathname;
-  if (pathname.startsWith('/editor')) {
-    return '/editor';
+// ==================== Markdown Parser (内联，避免外部依赖) ====================
+const Markdown = {
+  parse(text) {
+    if (!text) return '';
+
+    // 转义 HTML
+    const html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Code blocks (must be first)
+    let result = html.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+      return `<pre><code class="language-${lang}">${this.escapeHtml(code.trim())}</code></pre>`;
+    });
+
+    // Inline code
+    result = result.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Headers
+    result = result.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    result = result.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    result = result.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // Bold and Italic
+    result = result.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    result = result.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Links
+    result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+    // Images
+    result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
+
+    // Blockquotes
+    result = result.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+    // Unordered lists
+    result = result.replace(/^\* (.+)$/gm, '<li>$1</li>');
+    result = result.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+    // Ordered lists
+    result = result.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    // Horizontal rules
+    result = result.replace(/^---$/gm, '<hr>');
+
+    // Line breaks and paragraphs
+    result = result.replace(/\n\n+/g, '</p><p>');
+    result = '<p>' + result + '</p>';
+
+    // Clean up empty paragraphs
+    result = result.replace(/<p>(<\/p>|<h[1-6]>)/g, '$1');
+    result = result.replace(/(<\/h[1-6]>|<\/pre>|<\/ul>|<\/ol>|<hr>)<\/p>/g, '$1');
+    result = result.replace(/<p><\/p>/g, '');
+
+    return result;
+  },
+
+  escapeHtml(text) {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
-  return '';
-}
-const API = getApiBase();
+};
 
-// 状态
-let currentFile = null;
-let currentDir = '';
-let files = [];
-let modified = [];
-let changes = [];
-let isPreviewMode = false;
-let draggedItem = null;
-let changesExpanded = false;
+// ==================== API 配置 ====================
+const API = window.location.pathname.startsWith('/editor') ? '/editor' : '';
 
-// DOM 元素
-const fileTree = document.getElementById('fileTree');
-const editor = document.getElementById('editor');
-const preview = document.getElementById('preview');
-const filePathEl = document.getElementById('filePath');
-const saveBtn = document.getElementById('saveBtn');
-const modifiedIndicator = document.getElementById('modifiedIndicator');
-const modifiedCount = document.querySelector('.modified-count');
-const newFileDialog = document.getElementById('newFileDialog');
-const newFileNameInput = document.getElementById('newFileName');
-const newFolderDialog = document.getElementById('newFolderDialog');
-const newFolderNameInput = document.getElementById('newFolderName');
-const renameDialog = document.getElementById('renameDialog');
-const renameInput = document.getElementById('renameInput');
-const uploadDialog = document.getElementById('uploadDialog');
-const uploadArea = document.getElementById('uploadArea');
-const fileInput = document.getElementById('fileInput');
-const confirmUploadBtn = document.getElementById('confirmUpload');
-const apiInfoBtn = document.getElementById('apiInfoBtn');
-const apiInfo = document.getElementById('apiInfo');
+// ==================== 状态管理 ====================
+const state = {
+  files: [],
+  currentFile: null,
+  currentDir: '',
+  isPreviewMode: false
+};
 
-// 确认对话框
-const confirmDialog = document.getElementById('confirmDialog');
-const confirmTitle = document.getElementById('confirmTitle');
-const confirmMessage = document.getElementById('confirmMessage');
-const confirmOk = document.getElementById('confirmOk');
-const confirmCancel = document.getElementById('confirmCancel');
+// ==================== DOM 元素 ====================
+const dom = {
+  fileTree: document.getElementById('fileTree'),
+  editor: document.getElementById('editor'),
+  preview: document.getElementById('preview'),
+  previewPane: document.getElementById('previewPane'),
+  fileStatus: document.getElementById('fileStatus'),
+  saveBtn: document.getElementById('saveBtn'),
+  toastContainer: document.getElementById('toastContainer'),
+  newFileDialog: document.getElementById('newFileDialog'),
+  newFolderDialog: document.getElementById('newFolderDialog'),
+  renameDialog: document.getElementById('renameDialog'),
+  deleteDialog: document.getElementById('deleteDialog')
+};
 
-function showConfirm(title, message) {
-  return new Promise(resolve => {
-    confirmTitle.textContent = title;
-    confirmMessage.textContent = message;
-    confirmOk.onclick = () => { confirmDialog.close(); resolve(true); };
-    confirmCancel.onclick = () => { confirmDialog.close(); resolve(false); };
-    confirmDialog.showModal();
-  });
-}
-
-confirmDialog.addEventListener('click', (e) => {
-  if (e.target === confirmDialog) {
-    confirmDialog.close();
-  }
-});
-
-// Toast 通知
-function toast(message, type = 'info', duration = 3000) {
-  const container = document.getElementById('toastContainer');
-
-  const icons = {
-    success: '<i data-lucide="circle-check"></i>',
-    error: '<i data-lucide="alert-circle"></i>',
-    warning: '<i data-lucide="alert-triangle"></i>',
-    info: '<i data-lucide="info"></i>',
-  };
-
+// ==================== 工具函数 ====================
+function toast(message, type = 'info') {
   const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span>${message}</span>`;
-  container.appendChild(el);
-  lucide.createIcons({ root: el });
-  setTimeout(() => {
-    el.classList.add('toast-remove');
-    setTimeout(() => el.remove(), 300);
-  }, duration);
+  el.className = `toast ${type}`;
+  el.textContent = message;
+  dom.toastContainer.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
 }
-
-// 加载状态
-let loadingCount = 0;
 
 function showLoading() {
-  loadingCount++;
-  if (loadingCount === 1) {
-    const overlay = document.createElement('div');
-    overlay.className = 'loading-overlay';
-    overlay.id = 'loadingOverlay';
-    const spinner = document.createElement('div');
-    spinner.className = 'spinner';
-    overlay.appendChild(spinner);
-    document.querySelector('.main').appendChild(overlay);
+  dom.fileTree.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+}
+
+// ==================== API 调用 ====================
+async function apiFetch(url, options = {}) {
+  try {
+    const response = await fetch(`${API}${url}`, options);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    toast(error.message, 'error');
+    throw error;
   }
 }
-
-function hideLoading() {
-  loadingCount = Math.max(0, loadingCount - 1);
-  if (loadingCount === 0) {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.remove();
-  }
-}
-
-// 动态设置 API URL
-const currentApiUrl = window.location.origin + '/editor/api/upload';
-if (document.getElementById('apiUrl')) {
-  document.getElementById('apiUrl').textContent = currentApiUrl;
-  document.getElementById('apiCurl').textContent = `curl -X POST ${currentApiUrl} \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "path": "guide/example.md",
-    "content": "# 新文档\\n\\n内容...",
-    "deploy": true
-  }'`;
-  document.getElementById('apiFileCurl').textContent = `curl -X POST ${currentApiUrl}/file \\
-  -F "file=@/path/to/document.md" \\
-  -F "path=guide" \\
-  -F "deploy=true"`;
-}
-
-// 初始化 marked
-marked.setOptions({
-  highlight: (code, lang) => {
-    if (lang && hljs.getLanguage(lang)) {
-      return hljs.highlight(code, { language: lang }).value;
-    }
-    return hljs.highlightAuto(code).value;
-  },
-});
 
 // ==================== 文件操作 ====================
-
-// 显示文件树骨架屏
-function showTreeSkeleton() {
-  fileTree.innerHTML = `
-    <div class="skeleton-tree">
-      ${Array(8).fill(0).map(() => `
-        <div class="skeleton-tree-item">
-          <div class="skeleton skeleton-icon"></div>
-          <div class="skeleton skeleton-text ${['skeleton-text-sm', 'skeleton-text-md', 'skeleton-text-lg'][Math.floor(Math.random() * 3)]}"></div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
 async function loadFiles() {
-  showTreeSkeleton();
+  showLoading();
   try {
-    const res = await fetch(`${API}/api/files`);
-    const data = await res.json();
-    files = data.files;
-    modified = data.modified;
-    changes = data.changes || [];
+    const data = await apiFetch('/api/files');
+    state.files = data.files || [];
     renderFileTree();
-    updateModifiedIndicator();
-    renderChangesList();
   } catch (error) {
-    fileTree.innerHTML = `
-      <div class="sidebar-empty">
-        <i data-lucide="alert-circle"></i>
-        <p>加载失败: ${error.message}</p>
-      </div>
-    `;
-    lucide.createIcons({ root: fileTree });
-    toast('加载文件失败: ' + error.message, 'error');
+    dom.fileTree.innerHTML = '<div class="empty-state">加载失败</div>';
   }
 }
 
-function renderFileTree() {
-  fileTree.innerHTML = renderTreeItems(files);
-  lucide.createIcons({ root: fileTree });
-  attachDragEvents();
-}
+function renderFileTree(items = state.files, level = 0) {
+  if (!items.length) {
+    dom.fileTree.innerHTML = '<div class="empty-state">暂无文件</div>';
+    return;
+  }
 
-function renderTreeItems(items, level = 0) {
-  return items.map(item => {
-    const isModified = modified.includes(item.path);
-    const isActive = currentFile === item.path;
+  const html = items.map(item => {
+    const isActive = state.currentFile === item.path;
+    const indent = level * 16;
 
     if (item.isDirectory) {
       return `
-        <div class="tree-item tree-folder"
-             style="padding-left: ${8 + level * 16}px"
-             data-path="${item.path}"
-             data-type="folder"
-             draggable="true">
-          <span class="tree-icon"><i data-lucide="folder"></i></span>
+        <div class="tree-item tree-folder" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="folder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
           <span class="tree-name">${item.name}</span>
-          <span class="tree-rename"><i data-lucide="pencil"></i></span>
         </div>
-        <div class="tree-children">
-          ${item.children ? renderTreeItems(item.children, level + 1) : ''}
-        </div>
+        ${item.children ? `<div class="tree-children">${renderFileTreeItems(item.children, level + 1)}</div>` : ''}
       `;
     } else {
       return `
-        <div class="tree-item ${isActive ? 'active' : ''} ${isModified ? 'modified' : ''}"
-             style="padding-left: ${8 + level * 16}px"
-             data-path="${item.path}"
-             data-type="file"
-             draggable="true">
-          <span class="tree-icon"><i data-lucide="file"></i></span>
+        <div class="tree-item ${isActive ? 'active' : ''}" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+          </svg>
           <span class="tree-name">${item.name}</span>
-          <span class="tree-open" title="打开"><i data-lucide="eye"></i></span>
-          <span class="tree-rename"><i data-lucide="pencil"></i></span>
-          <span class="tree-delete"><i data-lucide="x"></i></span>
+          <div class="tree-actions">
+            <button class="btn-delete" data-path="${item.path}" title="删除">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  }).join('');
+
+  dom.fileTree.innerHTML = html;
+  attachTreeEvents();
+}
+
+function renderFileTreeItems(items, level) {
+  return items.map(item => {
+    const indent = level * 16;
+    if (item.isDirectory) {
+      return `
+        <div class="tree-item tree-folder" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="folder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="tree-name">${item.name}</span>
+        </div>
+        ${item.children ? `<div class="tree-children">${renderFileTreeItems(item.children, level + 1)}</div>` : ''}
+      `;
+    } else {
+      return `
+        <div class="tree-item" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+          </svg>
+          <span class="tree-name">${item.name}</span>
+          <div class="tree-actions">
+            <button class="btn-delete" data-path="${item.path}" title="删除">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
         </div>
       `;
     }
   }).join('');
 }
 
-async function openFile(path) {
-  currentFile = path;
-  currentDir = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
-  filePathEl.textContent = path;
-  saveBtn.disabled = false;
+function attachTreeEvents() {
+  dom.fileTree.querySelectorAll('.tree-item[data-type="file"]').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (!e.target.closest('.btn-delete')) {
+        openFile(item.dataset.path);
+      }
+    });
+  });
 
-  // 显示编辑器骨架屏
-  const editorWrapper = document.getElementById('editorWrapper');
-  const originalEditorHTML = editorWrapper.innerHTML;
-  editorWrapper.innerHTML = `
-    <div class="skeleton-editor">
-      <div class="skeleton skeleton-title"></div>
-      <div class="skeleton skeleton-line skeleton-line-1"></div>
-      <div class="skeleton skeleton-line skeleton-line-2"></div>
-      <div class="skeleton skeleton-line skeleton-line-3"></div>
-      <div class="skeleton skeleton-line skeleton-line-4"></div>
-      <div class="skeleton skeleton-line skeleton-line-5"></div>
-      <div class="skeleton skeleton-line skeleton-line-6"></div>
-      <div class="skeleton skeleton-line skeleton-line-1"></div>
-      <div class="skeleton skeleton-line skeleton-line-2"></div>
-      <div class="skeleton skeleton-line skeleton-line-3"></div>
-    </div>
-  `;
+  dom.fileTree.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showDeleteDialog(btn.dataset.path);
+    });
+  });
+}
+
+async function openFile(path) {
+  state.currentFile = path;
+  state.currentDir = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
 
   try {
-    const res = await fetch(`${API}/api/file/${encodeURIComponent(path)}`);
-    const data = await res.json();
-
-    // 恢复编辑器并设置内容
-    editorWrapper.innerHTML = originalEditorHTML;
-    const restoredEditor = document.getElementById('editor');
-    restoredEditor.value = data.content;
-
-    // 重新绑定事件监听器
-    restoredEditor.addEventListener('input', updatePreview);
+    const data = await apiFetch(`/api/file/${encodeURIComponent(path)}`);
+    dom.editor.value = data.content || '';
+    dom.fileStatus.textContent = path;
+    dom.fileStatus.classList.remove('modified');
+    dom.saveBtn.disabled = false;
 
     updatePreview();
     renderFileTree();
   } catch (error) {
-    editorWrapper.innerHTML = `
-      <div class="sidebar-empty" style="height: 100%;">
-        <i data-lucide="alert-circle"></i>
-        <p>打开文件失败: ${error.message}</p>
-      </div>
-    `;
-    lucide.createIcons({ root: editorWrapper });
-    toast('打开文件失败: ' + error.message, 'error');
+    toast('打开文件失败', 'error');
   }
 }
 
 async function saveFile() {
-  if (!currentFile) return;
-  showLoading();
+  if (!state.currentFile) return;
 
   try {
-    const res = await fetch(`${API}/api/file/${encodeURIComponent(currentFile)}`, {
+    await apiFetch(`/api/file/${encodeURIComponent(state.currentFile)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: editor.value }),
+      body: JSON.stringify({ content: dom.editor.value })
     });
 
-    const data = await res.json();
-
-    if (data.unchanged) {
-      hideLoading();
-      return;
-    }
-
-    await loadFiles();
-    showSaveSuccess();
-    toast('已保存', 'success', 1500);
+    dom.fileStatus.textContent = state.currentFile;
+    dom.fileStatus.classList.remove('modified');
+    toast('已保存', 'success');
   } catch (error) {
-    toast('保存失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
+    toast('保存失败', 'error');
   }
 }
 
-async function deleteFile(path, event) {
-  event.stopPropagation();
-
-  const confirmed = await showConfirm('删除文件', `确定要删除 ${path} 吗？此操作不可撤销。`);
-  if (!confirmed) return;
-
-  showLoading();
+async function deleteFile(path) {
   try {
-    await fetch(`${API}/api/file/${encodeURIComponent(path)}`, {
-      method: 'DELETE',
-    });
+    await apiFetch(`/api/file/${encodeURIComponent(path)}`, { method: 'DELETE' });
 
-    if (currentFile === path) {
-      currentFile = null;
-      currentDir = '';
-      editor.value = '';
-      filePathEl.textContent = '未选择文件';
-      saveBtn.disabled = true;
+    if (state.currentFile === path) {
+      state.currentFile = null;
+      dom.editor.value = '';
+      dom.fileStatus.textContent = '未选择文件';
+      dom.saveBtn.disabled = true;
     }
 
+    dom.deleteDialog.close();
     await loadFiles();
-    toast('已删除: ' + path, 'success', 2000);
+    toast('已删除', 'success');
   } catch (error) {
-    toast('删除失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
-  }
-}
-
-async function renameItem(path, type, event) {
-  event.stopPropagation();
-
-  const oldName = path.split('/').pop();
-  renameInput.value = oldName;
-  renameDialog.dataset.path = path;
-  renameDialog.showModal();
-}
-
-async function renameItemConfirm() {
-  const path = renameDialog.dataset.path;
-  const newName = renameInput.value.trim();
-
-  if (!newName) return;
-
-  showLoading();
-  try {
-    const res = await fetch(`${API}/api/rename/${encodeURIComponent(path)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newName }),
-    });
-
-    const data = await res.json();
-    await loadFiles();
-
-    if (currentFile === path) {
-      openFile(data.newPath);
-    }
-
-    renameDialog.close();
-    toast('已重命名', 'success', 1500);
-  } catch (error) {
-    toast('重命名失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
+    toast('删除失败', 'error');
   }
 }
 
 async function createFile() {
-  const name = newFileNameInput.value.trim();
+  const name = document.getElementById('newFileName').value.trim();
   if (!name) return;
 
   if (!name.endsWith('.md')) {
-    toast('文件名必须以 .md 结尾', 'warning');
+    toast('文件名必须以 .md 结尾', 'error');
     return;
   }
 
-  showLoading();
   try {
-    const res = await fetch(`${API}/api/new/${encodeURIComponent(currentDir)}`, {
+    const data = await apiFetch(`/api/new/${encodeURIComponent(state.currentDir)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name })
     });
 
-    const data = await res.json();
+    dom.newFileDialog.close();
+    document.getElementById('newFileName').value = '';
     await loadFiles();
     openFile(data.path);
-    newFileDialog.close();
-    newFileNameInput.value = '';
-    toast('已创建: ' + name, 'success', 1500);
   } catch (error) {
-    toast('创建文件失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
+    toast('创建失败', 'error');
   }
 }
 
 async function createFolder() {
-  newFolderNameInput.value = '';
-  newFolderDialog.showModal();
-}
-
-async function createFolderConfirm() {
-  const name = newFolderNameInput.value.trim();
+  const name = document.getElementById('newFolderName').value.trim();
   if (!name) return;
 
-  showLoading();
   try {
-    await fetch(`${API}/api/folder/${encodeURIComponent(currentDir)}`, {
+    await apiFetch(`/api/folder/${encodeURIComponent(state.currentDir)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name })
     });
 
+    dom.newFolderDialog.close();
+    document.getElementById('newFolderName').value = '';
     await loadFiles();
-    newFolderDialog.close();
-    newFolderNameInput.value = '';
-    toast('已创建目录: ' + name, 'success', 1500);
+    toast('目录已创建', 'success');
   } catch (error) {
-    toast('创建目录失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
+    toast('创建失败', 'error');
   }
 }
 
-async function uploadFiles(fileList) {
-  showLoading();
-  let uploaded = 0;
-  let skipped = 0;
-
-  for (const file of fileList) {
-    if (!file.name.endsWith('.md') && !file.name.endsWith('.txt')) {
-      skipped++;
-      continue;
-    }
-
-    try {
-      const content = await file.text();
-
-      await fetch(`${API}/api/new/${encodeURIComponent(currentDir)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: file.name }),
-      });
-
-      const newPath = currentDir ? `${currentDir}/${file.name}` : file.name;
-
-      await fetch(`${API}/api/file/${encodeURIComponent(newPath)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
-      });
-      uploaded++;
-    } catch (error) {
-      toast(`上传 ${file.name} 失败: ${error.message}`, 'error');
-    }
-  }
-
-  await loadFiles();
-  hideLoading();
-  uploadDialog.close();
-
-  if (uploaded > 0) {
-    toast(`成功上传 ${uploaded} 个文件` + (skipped > 0 ? `，跳过 ${skipped} 个` : ''), 'success', 2000);
-  }
-}
-
-async function moveItem(itemPath, targetDir) {
-  showLoading();
-  try {
-    const fileName = itemPath.split('/').pop();
-    const oldDir = itemPath.includes('/') ? itemPath.substring(0, itemPath.lastIndexOf('/')) : '';
-    const newPath = targetDir ? `${targetDir}/${fileName}` : fileName;
-
-    if (oldDir === targetDir) {
-      hideLoading();
-      return;
-    }
-
-    const contentRes = await fetch(`${API}/api/file/${encodeURIComponent(itemPath)}`);
-    const contentData = await contentRes.json();
-
-    await fetch(`${API}/api/new/${encodeURIComponent(targetDir)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: fileName }),
-    });
-
-    await fetch(`${API}/api/file/${encodeURIComponent(newPath)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: contentData.content }),
-    });
-
-    await fetch(`${API}/api/move`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: itemPath,
-        to: newPath
-      }),
-    });
-
-    await loadFiles();
-
-    if (currentFile === itemPath) {
-      openFile(newPath);
-    }
-
-    toast('已移动', 'success', 1500);
-  } catch (error) {
-    toast('移动失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
-  }
-}
-
-async function deploy() {
-  if (modified.length === 0) return;
-
-  const confirmed = await showConfirm('部署文件', `确定要部署 ${modified.length} 个文件吗？这将把修改同步到正式目录。`);
-  if (!confirmed) return;
-
-  showLoading();
-  try {
-    const res = await fetch(`${API}/api/deploy`, { method: 'POST' });
-    const data = await res.json();
-
-    if (data.success) {
-      await loadFiles();
-      toast(data.message, 'success', 3000);
-    }
-  } catch (error) {
-    toast('部署失败: ' + error.message, 'error');
-  } finally {
-    hideLoading();
-  }
-}
-
-function updateModifiedIndicator() {
-  if (modified.length > 0) {
-    modifiedIndicator.style.display = 'flex';
-    modifiedCount.textContent = modified.length;
-  } else {
-    modifiedIndicator.style.display = 'none';
-  }
-}
-
-function renderChangesList() {
-  const changesList = document.getElementById('changesList');
-
-  if (changes.length === 0) {
-    changesList.innerHTML = '<div class="changes-empty">暂无改动</div>';
-    return;
-  }
-
-  const typeLabels = {
-    created: '<i data-lucide="plus"></i>',
-    modified: '<i data-lucide="pencil"></i>',
-    deleted: '<i data-lucide="x"></i>',
-    moved: '<i data-lucide="arrow-right"></i>'
-  };
-
-  const typeNames = {
-    created: '新建',
-    modified: '修改',
-    deleted: '删除',
-    moved: '移动'
-  };
-
-  changesList.innerHTML = changes.map(change => `
-    <div class="change-item">
-      <span class="change-type ${change.type}" title="${typeNames[change.type]}">${typeLabels[change.type]}</span>
-      <span class="change-path">${change.path}</span>
-    </div>
-  `).join('');
-
-  // 初始化 Lucide 图标
-  lucide.createIcons({ root: changesList });
-}
-
-function toggleChanges() {
-  changesExpanded = !changesExpanded;
-  const changesList = document.getElementById('changesList');
-  const toggleBtn = document.getElementById('toggleChanges');
-
-  if (changesExpanded) {
-    changesList.style.display = 'block';
-    toggleBtn.classList.add('expanded');
-  } else {
-    changesList.style.display = 'none';
-    toggleBtn.classList.remove('expanded');
-  }
-}
-
+// ==================== 预览功能 ====================
 function updatePreview() {
-  if (isPreviewMode) {
-    preview.innerHTML = marked.parse(editor.value);
-  }
+  dom.preview.innerHTML = Markdown.parse(dom.editor.value);
 }
 
 function togglePreview() {
-  isPreviewMode = !isPreviewMode;
+  state.isPreviewMode = !state.isPreviewMode;
 
-  const editorWrapper = document.getElementById('editorWrapper');
-  const previewWrapper = document.getElementById('previewWrapper');
-  const toggleBtn = document.getElementById('previewToggle');
-
-  if (isPreviewMode) {
-    editorWrapper.style.display = 'none';
-    previewWrapper.style.display = 'block';
-    toggleBtn.textContent = '编辑';
+  if (state.isPreviewMode) {
+    dom.previewPane.style.display = 'block';
+    dom.editor.parentElement.style.display = 'none';
+    document.getElementById('previewToggle').textContent = '编辑';
     updatePreview();
   } else {
-    editorWrapper.style.display = 'block';
-    previewWrapper.style.display = 'none';
-    toggleBtn.textContent = '预览';
+    dom.previewPane.style.display = 'none';
+    dom.editor.parentElement.style.display = 'block';
+    document.getElementById('previewToggle').textContent = '预览';
   }
 }
 
-function showSaveSuccess() {
-  const originalHTML = saveBtn.innerHTML;
-  saveBtn.innerHTML = '<i data-lucide="check"></i> 已保存';
-  lucide.createIcons({ root: saveBtn });
-  saveBtn.style.background = 'var(--success)';
-  setTimeout(() => {
-    saveBtn.innerHTML = originalHTML;
-    saveBtn.style.background = '';
-  }, 1500);
+// ==================== 对话框 ====================
+function showDeleteDialog(path) {
+  document.getElementById('deleteMessage').textContent = `确定要删除 ${path} 吗？`;
+  dom.deleteDialog.dataset.path = path;
+  dom.deleteDialog.showModal();
 }
-
-// ==================== API 复制功能 ====================
-
-function copyText(text, btn) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  try {
-    document.execCommand('copy');
-    const originalText = btn.textContent;
-    btn.textContent = '已复制';
-    setTimeout(() => btn.textContent = originalText, 1500);
-  } catch (e) {
-    console.error('复制失败:', e);
-  }
-  document.body.removeChild(ta);
-}
-
-document.querySelectorAll('.btn-copy').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const targetId = btn.dataset.copy;
-    const source = document.getElementById(targetId);
-    if (source) {
-      copyText(source.textContent, btn);
-    }
-  });
-});
-
-// ==================== 拖动功能 ====================
-
-function attachDragEvents() {
-  const items = document.querySelectorAll('.tree-item');
-
-  items.forEach(item => {
-    // Desktop HTML5 drag
-    item.addEventListener('dragstart', handleDragStart);
-    item.addEventListener('dragend', handleDragEnd);
-    item.addEventListener('dragover', handleDragOver);
-    item.addEventListener('dragleave', handleDragLeave);
-    item.addEventListener('drop', handleDrop);
-  });
-}
-
-// --- Desktop Drag and Drop ---
-
-function handleDragStart(e) {
-  draggedItem = e.target.closest('.tree-item');
-  draggedItem.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragEnd(e) {
-  e.target.closest('.tree-item')?.classList.remove('dragging');
-  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-  draggedItem = null;
-}
-
-function handleDragOver(e) {
-  e.preventDefault();
-  const target = e.target.closest('.tree-item');
-  if (target && target !== draggedItem) {
-    target.classList.add('drag-over');
-  }
-}
-
-function handleDragLeave(e) {
-  e.target.closest('.tree-item')?.classList.remove('drag-over');
-}
-
-function handleDrop(e) {
-  e.preventDefault();
-  const target = e.target.closest('.tree-item');
-
-  if (!target || !draggedItem || target === draggedItem) return;
-
-  const sourcePath = draggedItem.dataset.path;
-  const targetPath = target.dataset.path;
-  const targetType = target.dataset.type;
-
-  if (targetType !== 'folder') {
-    toast('只能移动到文件夹中', 'warning');
-    return;
-  }
-
-  moveItem(sourcePath, targetPath);
-  target.classList.remove('drag-over');
-}
-
-// --- Mobile Touch Drag (triggered only on .tree-icon, no passive:false until drag starts) ---
-
-let touchDraggedItem = null;
-let touchGhost = null;
-let longPressTimer = null;
-let longPressActive = false;
-let onDragMove = null;
-let onDragEnd = null;
-const LONG_PRESS_MS = 400;
-
-fileTree.addEventListener('touchstart', e => {
-  const icon = e.target.closest('.tree-icon');
-  if (!icon) return;
-
-  longPressActive = false;
-  const item = icon.closest('.tree-item');
-  if (!item) return;
-
-  longPressTimer = setTimeout(() => {
-    longPressActive = true;
-    touchMoved = true;
-    touchDraggedItem = item;
-    item.classList.add('dragging');
-
-    const rect = item.getBoundingClientRect();
-    touchGhost = item.cloneNode(true);
-    touchGhost.style.position = 'fixed';
-    touchGhost.style.width = rect.width + 'px';
-    touchGhost.style.opacity = '0.85';
-    touchGhost.style.pointerEvents = 'none';
-    touchGhost.style.zIndex = '9999';
-    touchGhost.style.background = 'var(--text-primary)';
-    touchGhost.style.color = 'var(--bg-primary)';
-    touchGhost.style.borderRadius = 'var(--radius-md)';
-    touchGhost.style.boxShadow = 'var(--shadow-lg)';
-    touchGhost.style.transform = 'scale(1.05)';
-    document.body.appendChild(touchGhost);
-
-    const touch = e.touches[0];
-    touchGhost.style.left = (touch.clientX - rect.width / 2) + 'px';
-    touchGhost.style.top = (touch.clientY - 30) + 'px';
-
-    if (navigator.vibrate) navigator.vibrate(10);
-
-    // Only now bind the blocking listeners (no impact on scrolling until drag)
-    onDragMove = ev => {
-      ev.preventDefault();
-      const t = ev.touches[0];
-      if (touchGhost) {
-        touchGhost.style.left = (t.clientX - touchGhost.offsetWidth / 2) + 'px';
-        touchGhost.style.top = (t.clientY - 30) + 'px';
-      }
-      const el = document.elementFromPoint(t.clientX, t.clientY);
-      const target = el?.closest('.tree-item[data-type="folder"]');
-      document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
-      if (target && target !== touchDraggedItem) target.classList.add('drag-over');
-    };
-
-    onDragEnd = ev => {
-      clearTimeout(longPressTimer);
-      if (!longPressActive) return;
-      const t = ev.changedTouches[0];
-      requestAnimationFrame(() => {
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        const target = el?.closest('.tree-item[data-type="folder"]');
-        if (target && target !== touchDraggedItem) {
-          moveItem(touchDraggedItem.dataset.path, target.dataset.path);
-        }
-        touchDraggedItem?.classList.remove('dragging');
-        document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
-        if (touchGhost) { touchGhost.remove(); touchGhost = null; }
-        touchDraggedItem = null;
-        longPressActive = false;
-      });
-      document.removeEventListener('touchmove', onDragMove, { passive: false });
-      document.removeEventListener('touchend', onDragEnd);
-      document.removeEventListener('touchcancel', onDragEnd);
-    };
-
-    document.addEventListener('touchmove', onDragMove, { passive: false });
-    document.addEventListener('touchend', onDragEnd);
-    document.addEventListener('touchcancel', onDragEnd);
-  }, LONG_PRESS_MS);
-}, { passive: true });
-
-// Track touch movement to prevent click on scroll
-let touchStartY = 0;
-let touchMoved = false;
-
-fileTree.addEventListener('touchstart', e => {
-  touchStartY = e.touches[0].clientY;
-  touchMoved = false;
-}, { passive: true });
-
-fileTree.addEventListener('touchmove', e => {
-  if (!longPressActive) clearTimeout(longPressTimer);
-  if (Math.abs(e.touches[0].clientY - touchStartY) > 10) {
-    touchMoved = true;
-  }
-}, { passive: true });
-
-fileTree.addEventListener('touchend', () => {
-  if (!longPressActive) clearTimeout(longPressTimer);
-}, { passive: true });
-fileTree.addEventListener('touchcancel', () => {
-  if (!longPressActive) clearTimeout(longPressTimer);
-}, { passive: true });
-
-fileTree.addEventListener('contextmenu', e => e.preventDefault());
 
 // ==================== 事件监听 ====================
-
-fileTree.addEventListener('click', (e) => {
-  if (touchMoved) return;
-
-  const deleteBtn = e.target.closest('.tree-delete');
-  const renameBtn = e.target.closest('.tree-rename');
-  const openBtn = e.target.closest('.tree-open');
-
-  if (deleteBtn) {
-    e.stopPropagation();
-    const item = deleteBtn.closest('.tree-item');
-    if (item) {
-      deleteFile(item.dataset.path, e);
-    }
-    return;
+dom.editor.addEventListener('input', () => {
+  if (state.currentFile) {
+    dom.fileStatus.textContent = `${state.currentFile} *`;
+    dom.fileStatus.classList.add('modified');
   }
-
-  if (renameBtn) {
-    e.stopPropagation();
-    const item = renameBtn.closest('.tree-item');
-    if (item) {
-      const type = item.dataset.type;
-      renameItem(item.dataset.path, type, e);
-    }
-    return;
-  }
-
-  if (openBtn) {
-    e.stopPropagation();
-    const item = openBtn.closest('.tree-item');
-    if (item && item.dataset.type === 'file') {
-      openFile(item.dataset.path);
-    }
-    return;
+  if (state.isPreviewMode) {
+    updatePreview();
   }
 });
 
 document.getElementById('newFileBtn').addEventListener('click', () => {
-  newFileDialog.showModal();
+  dom.newFileDialog.showModal();
 });
 
-document.getElementById('newFolderBtn').addEventListener('click', () => newFolderDialog.showModal());
+document.getElementById('newFolderBtn').addEventListener('click', () => {
+  dom.newFolderDialog.showModal();
+});
 
 document.getElementById('refreshBtn').addEventListener('click', loadFiles);
 
 document.getElementById('saveBtn').addEventListener('click', saveFile);
 
-document.getElementById('deployBtn').addEventListener('click', deploy);
-
-document.getElementById('toggleChanges').addEventListener('click', (e) => {
-  e.stopPropagation();
-  toggleChanges();
-});
-
-modifiedIndicator.addEventListener('click', (e) => {
-  if (e.target === modifiedIndicator || e.target.closest('.modified-summary')) {
-    toggleChanges();
-  }
-});
-
 document.getElementById('previewToggle').addEventListener('click', togglePreview);
 
 document.getElementById('cancelNewFile').addEventListener('click', () => {
-  newFileDialog.close();
-  newFileNameInput.value = '';
+  dom.newFileDialog.close();
+  document.getElementById('newFileName').value = '';
 });
 
-newFileDialog.addEventListener('submit', (e) => {
+document.getElementById('cancelNewFolder').addEventListener('click', () => {
+  dom.newFolderDialog.close();
+  document.getElementById('newFolderName').value = '';
+});
+
+document.getElementById('cancelRename').addEventListener('click', () => {
+  dom.renameDialog.close();
+});
+
+document.getElementById('cancelDelete').addEventListener('click', () => {
+  dom.deleteDialog.close();
+});
+
+document.getElementById('confirmDelete').addEventListener('click', () => {
+  if (dom.deleteDialog.dataset.path) {
+    deleteFile(dom.deleteDialog.dataset.path);
+  }
+});
+
+dom.newFileDialog.querySelector('form').addEventListener('submit', (e) => {
   e.preventDefault();
   createFile();
 });
 
-renameDialog.addEventListener('submit', (e) => {
+dom.newFolderDialog.querySelector('form').addEventListener('submit', (e) => {
   e.preventDefault();
-  renameItemConfirm();
+  createFolder();
 });
 
-document.getElementById('cancelRename').addEventListener('click', () => {
-  renameDialog.close();
-});
-
-newFolderDialog.addEventListener('submit', (e) => {
-  e.preventDefault();
-  createFolderConfirm();
-});
-
-document.getElementById('cancelNewFolder').addEventListener('click', () => {
-  newFolderDialog.close();
-  newFolderNameInput.value = '';
-});
-
-apiInfoBtn.addEventListener('click', () => {
-  apiInfo.style.display = apiInfo.style.display === 'none' ? 'block' : 'none';
-});
-
-document.getElementById('cancelUpload').addEventListener('click', () => {
-  uploadDialog.close();
-});
-
-confirmUploadBtn.addEventListener('click', () => {
-  fileInput.click();
-});
-
-uploadArea.addEventListener('click', () => {
-  fileInput.click();
-});
-
-uploadArea.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  uploadArea.classList.add('dragover');
-});
-
-uploadArea.addEventListener('dragleave', () => {
-  uploadArea.classList.remove('dragover');
-});
-
-uploadArea.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadArea.classList.remove('dragover');
-
-  if (e.dataTransfer.files.length > 0) {
-    uploadFiles(e.dataTransfer.files);
-  }
-});
-
-fileInput.addEventListener('change', (e) => {
-  if (e.target.files.length > 0) {
-    uploadFiles(e.target.files);
-  }
-});
-
-editor.addEventListener('input', updatePreview);
-
+// 键盘快捷键
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
     saveFile();
   }
+  if (e.key === 'Escape') {
+    dom.newFileDialog.close();
+    dom.newFolderDialog.close();
+    dom.renameDialog.close();
+    dom.deleteDialog.close();
+  }
 });
 
-// 上传按钮事件
-document.getElementById('uploadBtn').addEventListener('click', () => {
-  uploadDialog.showModal();
-});
-
-// 将函数暴露到全局作用域
-window.openFile = openFile;
-window.deleteFile = deleteFile;
-window.renameItem = renameItem;
-window.copyText = copyText;
-window.toast = toast;
-
-// 初始化
-lucide.createIcons();
+// ==================== 初始化 ====================
 loadFiles();

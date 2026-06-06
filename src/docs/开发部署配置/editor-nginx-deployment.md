@@ -53,31 +53,67 @@ npm install
 npm run build
 ```
 
-### 4. 启动服务
+### 4. 启动服务（systemd 方式）
 
 ```bash
-# 方式一：前台运行（调试）
-cd /root/MkNexus
-npm run start
-# Ctrl+C 停止
+# 创建 systemd 服务（首次）
+cat > /etc/systemd/system/mknexus-monitor.service << 'EOF'
+[Unit]
+Description=MkNexus Monitor Deploy
+After=network.target
 
-# 方式二：后台运行（推荐）
-cd /root/MkNexus
-screen -dmS mknexus bash -c "npm run start"
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/MkNexus
+ExecStart=/usr/local/bin/node scripts/watch-and-deploy.cjs
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/mknexus-editor.service << 'EOF'
+[Unit]
+Description=MkNexus Editor Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/MkNexus
+ExecStart=/usr/local/bin/node scripts/editor-server.cjs
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 重载并启动
+systemctl daemon-reload
+systemctl enable mknexus-monitor mknexus-editor
+systemctl start mknexus-monitor mknexus-editor
 ```
 
 ### 5. 管理命令
 
 ```bash
-# 查看会话
-screen -list
+# 查看状态
+systemctl status mknexus-monitor mknexus-editor
 
-# 查看日志
-screen -r mknexus
-# Ctrl+A D 分离
+# 查看日志（实时）
+journalctl -u mknexus-monitor -f
+journalctl -u mknexus-editor -f
+
+# 重启服务
+systemctl restart mknexus-monitor mknexus-editor
 
 # 停止服务
-screen -X -S mknexus quit
+systemctl stop mknexus-monitor mknexus-editor
 ```
 
 ### 6. 访问地址
