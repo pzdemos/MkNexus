@@ -153,6 +153,15 @@
       background: var(--bg-tertiary);
     }
 
+    .tree-item.dragging {
+      opacity: 0.5;
+    }
+
+    .tree-item.drag-over {
+      background: var(--accent-dim);
+      border: 1px dashed var(--accent);
+    }
+
     .tree-item.active {
       background: var(--accent-dim);
       color: var(--accent);
@@ -160,6 +169,15 @@
 
     .tree-item.active svg {
       color: var(--accent);
+    }
+
+    .tree-item.current-dir {
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+    }
+
+    .tree-item.current-dir svg {
+      color: #3b82f6;
     }
 
     .tree-item.modified {
@@ -192,6 +210,31 @@
       background: var(--warning);
       border-radius: 50%;
       margin-right: 6px;
+    }
+
+    .btn-revert {
+      width: 16px;
+      height: 16px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 4px;
+    }
+
+    .btn-revert:hover {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+
+    .btn-revert svg {
+      width: 12px;
+      height: 12px;
     }
 
     .tree-children {
@@ -563,7 +606,87 @@
     .toastify {
       font-family: var(--font-sans) !important;
       border-radius: var(--radius-md) !important;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+      max-width: 280px !important;
+      padding: 10px 14px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+      z-index: 2000 !important;
+      position: fixed !important;
+    }
+
+    /* === In-place Notification === */
+    .notification {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      animation: slideDown 0.2s ease;
+    }
+
+    .notification.success {
+      background: var(--accent);
+      color: var(--bg-primary);
+    }
+
+    .notification.error {
+      background: var(--danger);
+      color: white;
+    }
+
+    .notification.info {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* === API Dialog === */
+    .api-row {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .api-copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .api-copy-btn:hover {
+      background: var(--border-hover);
+      color: var(--text-primary);
+    }
+
+    .api-copy-btn svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .api-copy-btn.copied {
+      background: var(--accent);
+      color: var(--bg-primary);
     }
 
     /* === Scrollbar === */
@@ -633,7 +756,10 @@
             :current-file="currentFile"
             :modified="modified"
             @open="openFile"
-            @delete="showDeleteModal">
+            @delete="showDeleteModal"
+            @move="moveFile"
+            @revert="revertFileChange"
+            @set-dir="setCurrentDir">
           </tree-item>
         </template>
       </div>
@@ -649,6 +775,7 @@
           <button class="btn" @click="togglePreview">
             {{ isPreviewMode ? '编辑' : '预览' }}
           </button>
+          <button class="btn" v-if="isModified" @click="revertFile" style="color: var(--text-muted);">恢复</button>
           <button class="btn btn-primary" @click="saveFile" :disabled="!currentFile">保存</button>
         </div>
       </div>
@@ -672,7 +799,11 @@
     <div v-if="dialogs.delete.show" class="dialog-overlay" @click.self="dialogs.delete.show = false">
       <div class="dialog">
         <h3>确认删除</h3>
-        <p class="dialog-message">确定要删除 {{ dialogs.delete.path }} 吗？此操作不可撤销。</p>
+        <p class="dialog-message">
+          确定要删除 {{ dialogs.delete.isDirectory ? '目录' : '文件' }} <strong>{{ dialogs.delete.name }}</strong> 吗？
+          <span v-if="dialogs.delete.isDirectory">目录下的所有文件也会被删除。</span>
+          此操作不可撤销。
+        </p>
         <div class="dialog-actions">
           <button class="btn" @click="dialogs.delete.show = false">取消</button>
           <button class="btn btn-primary" style="background: var(--danger)" @click="confirmDelete">删除</button>
@@ -696,6 +827,9 @@
     <div v-if="dialogs.newFile.show" class="dialog-overlay" @click.self="dialogs.newFile.show = false">
       <div class="dialog">
         <h3>新建文件</h3>
+        <p style="margin-bottom: 12px; color: var(--text-muted); font-size: 12px;">
+          位置: {{ currentDir || '根目录' }}
+        </p>
         <input
           v-model="dialogs.newFile.name"
           @keyup.enter="confirmNewFile"
@@ -713,6 +847,9 @@
     <div v-if="dialogs.newFolder.show" class="dialog-overlay" @click.self="dialogs.newFolder.show = false">
       <div class="dialog">
         <h3>新建目录</h3>
+        <p style="margin-bottom: 12px; color: var(--text-muted); font-size: 12px;">
+          位置: {{ currentDir || '根目录' }}
+        </p>
         <input
           v-model="dialogs.newFolder.name"
           @keyup.enter="confirmNewFolder"
@@ -728,17 +865,39 @@
 
     <!-- API Info Dialog -->
     <div v-if="dialogs.api.show" class="dialog-overlay" @click.self="dialogs.api.show = false">
-      <div class="dialog" style="max-width: 480px;">
+      <div class="dialog" style="max-width: 500px;">
         <h3>API 接口</h3>
         <div class="api-info">
           <p style="margin-bottom: 8px; color: var(--text-secondary);">JSON 方式（path 含文件名）：</p>
-          <pre class="api-code">{{ dialogs.api.jsonExample }}</pre>
+          <div class="api-row">
+            <pre class="api-code">{{ dialogs.api.jsonExample }}</pre>
+            <button class="api-copy-btn" @click="copyToApi(dialogs.api.jsonExample, $event)" :class="{ copied: dialogs.api.copied === 'json' }">
+              <svg v-if="dialogs.api.copied !== 'json'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 6L9 17l-5-5"/>
+              </svg>
+            </button>
+          </div>
 
           <p style="margin: 16px 0 8px; color: var(--text-secondary);">文件方式（path 是目录名）：</p>
-          <pre class="api-code">{{ dialogs.api.fileExample }}</pre>
+          <div class="api-row">
+            <pre class="api-code">{{ dialogs.api.fileExample }}</pre>
+            <button class="api-copy-btn" @click="copyToApi(dialogs.api.fileExample, $event)" :class="{ copied: dialogs.api.copied === 'file' }">
+              <svg v-if="dialogs.api.copied !== 'file'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 6L9 17l-5-5"/>
+              </svg>
+            </button>
+          </div>
 
           <p style="margin: 16px 0 4px; color: var(--text-muted); font-size: 11px;">
-            注：上传后自动部署，无需额外操作
+            注：传 deploy=1 自动部署，不传则仅保存
           </p>
         </div>
         <div class="dialog-actions">
@@ -754,19 +913,32 @@
   <script src="https://www.haoaiganfan.top/libs/toastify.min.js"></script>
 
   <script>
-    const { createApp, ref, computed, nextTick, onMounted } = Vue;
+    const { createApp, ref, computed, nextTick, onMounted, reactive, inject, provide } = Vue;
 
     // Tree Item Component
     const TreeItem = {
       name: 'TreeItem',
       props: ['item', 'currentFile', 'modified'],
-      emits: ['open', 'delete'],
+      emits: ['open', 'delete', 'move', 'revert', 'set-dir'],
       template: `
         <div>
           <div
             class="tree-item"
-            :class="{ active: currentFile === item.path, modified: modified.includes(item.path), 'tree-folder': item.isDirectory }"
-            @click="item.isDirectory || $emit('open', item.path)">
+            :class="{
+              active: currentFile === item.path,
+              modified: modified.includes(item.path),
+              'tree-folder': item.isDirectory,
+              dragging: isDragging,
+              'drag-over': isDragOver,
+              'current-dir': isCurrentDir
+            }"
+            draggable="true"
+            @click="handleClick"
+            @dragstart="handleDragStart"
+            @dragend="handleDragEnd"
+            @dragover.prevent="handleDragOver"
+            @dragleave="handleDragLeave"
+            @drop="handleDrop">
             <svg v-if="item.isDirectory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
             </svg>
@@ -776,8 +948,13 @@
             </svg>
             <span class="tree-name">{{ item.name }}</span>
             <span v-if="modified.includes(item.path) && !item.isDirectory" class="modified-dot"></span>
-            <div v-if="!item.isDirectory" class="tree-actions">
-              <button class="btn-delete" @click.stop="$emit('delete', item.path)">
+            <div class="tree-actions">
+              <button v-if="modified.includes(item.path) && !item.isDirectory" class="btn-revert" @click.stop="$emit('revert', item.path)" title="撤销修改">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12h18M3 12l6-6M3 12l6 6"/>
+                </svg>
+              </button>
+              <button class="btn-delete" @click.stop="$emit('delete', item)">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
@@ -792,16 +969,77 @@
               :current-file="currentFile"
               :modified="modified"
               @open="$emit('open', $event)"
-              @delete="$emit('delete', $event)">
+              @delete="$emit('delete', $event)"
+              @move="$emit('move', $event)"
+              @revert="$emit('revert', $event)"
+              @set-dir="$emit('set-dir', $event)">
             </tree-item>
           </div>
         </div>
-      `
+      `,
+      data() {
+        return {
+          isDragging: false,
+          isDragOver: false
+        };
+      },
+      inject: ['dragState', 'currentDir'],
+      computed: {
+        isCurrentDir() {
+          return this.item.isDirectory && this.currentDir === this.item.path;
+        }
+      },
+      methods: {
+        handleDragStart(e) {
+          console.log('dragStart', this.item.path);
+          if (this.item.isDirectory) return;
+          this.isDragging = true;
+          if (this.dragState) {
+            this.dragState.source = this.item.path;
+          }
+          e.dataTransfer.effectAllowed = 'move';
+        },
+        handleDragEnd() {
+          this.isDragging = false;
+          this.isDragOver = false;
+          this.dragState.source = null;
+          this.dragState.target = null;
+        },
+        handleDragOver(e) {
+          if (!this.item.isDirectory) return;
+          this.isDragOver = true;
+          this.dragState.target = this.item.path;
+          e.dataTransfer.dropEffect = 'move';
+        },
+        handleDragLeave() {
+          this.isDragOver = false;
+        },
+        handleDrop(e) {
+          e.preventDefault();
+          console.log('drop', this.item.path, 'source:', this.dragState?.source);
+          this.isDragOver = false;
+          if (!this.item.isDirectory || !this.dragState?.source) return;
+          this.$emit('move', { from: this.dragState.source, to: this.item.path });
+          this.dragState.source = null;
+          this.dragState.target = null;
+        },
+        handleClick() {
+          if (this.item.isDirectory) {
+            this.$emit('set-dir', this.item.path);
+          } else {
+            this.$emit('open', this.item.path);
+          }
+        }
+      }
     };
 
     createApp({
       components: { TreeItem },
       setup() {
+        // 拖拽状态
+        const dragState = reactive({ source: null, target: null });
+        provide('dragState', dragState);
+
         // State
         const files = ref([]);
         const modified = ref([]);
@@ -812,17 +1050,20 @@
         const isPreviewMode = ref(false);
         const loading = ref(true);
 
+        // 当前目录（用于创建位置）
+        provide('currentDir', computed(() => currentDir.value));
+
         // Dialogs
         const dialogs = ref({
-          delete: { show: false, path: '' },
+          delete: { show: false, path: '', name: '', isDirectory: false },
           deploy: { show: false },
           newFile: { show: false, name: '' },
           newFolder: { show: false, name: '' },
           api: {
             show: false,
-            uploadUrl: '',
             jsonExample: '',
-            fileExample: ''
+            fileExample: '',
+            copied: null
           }
         });
 
@@ -853,20 +1094,24 @@
         };
 
         const showToast = (message, type = 'info') => {
-          if (typeof Toastify !== 'undefined') {
-            const bgColor = type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : '#3b82f6';
-            Toastify({
-              text: message,
-              duration: 3000,
-              gravity: 'top',
-              position: 'right',
-              style: { background: bgColor },
-              stopOnFocus: true,
-              offset: { x: 16, y: 16 }
-            }).show();
-          } else {
-            alert(message);
+          // 移除旧通知
+          const oldNotification = document.querySelector('.notification');
+          if (oldNotification) {
+            oldNotification.remove();
           }
+
+          // 创建新通知
+          const notification = document.createElement('div');
+          notification.className = `notification ${type}`;
+          notification.textContent = message;
+          document.body.appendChild(notification);
+
+          // 自动移除
+          setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(-50%) translateY(-10px)';
+            setTimeout(() => notification.remove(), 200);
+          }, 2500);
         };
 
         // Methods
@@ -914,9 +1159,16 @@
           }
         };
 
-        const showDeleteModal = (path) => {
+        const revertFile = () => {
+          content.value = originalContent.value;
+          showToast('已恢复到原始内容', 'info');
+        };
+
+        const showDeleteModal = (item) => {
           dialogs.value.delete.show = true;
-          dialogs.value.delete.path = path;
+          dialogs.value.delete.path = item.path;
+          dialogs.value.delete.name = item.name;
+          dialogs.value.delete.isDirectory = item.isDirectory;
         };
 
         const confirmDelete = async () => {
@@ -1020,11 +1272,140 @@
           const fileUrl = baseUrl + '/api/upload/file';
           dialogs.value.api.jsonExample = `curl -X POST ${jsonUrl} \\
   -H "Content-Type: application/json" \\
-  -d '{"path":"docs/test.md","content":"# Hello World"}'`;
+  -d '{"path":"docs/test.md","content":"# Hello World","deploy":1}'`;
           dialogs.value.api.fileExample = `curl -X POST ${fileUrl} \\
   -F "file=@./test.md" \\
-  -F "path=docs"`;
+  -F "path=docs" \\
+  -F "deploy=1"`;
           dialogs.value.api.show = true;
+          dialogs.value.api.copied = null;
+        };
+
+        const copyToApi = async (text, event) => {
+          event.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(text);
+            const type = text.includes('application/json') ? 'json' : 'file';
+            dialogs.value.api.copied = type;
+            showToast('已复制到剪贴板', 'info');
+            setTimeout(() => {
+              dialogs.value.api.copied = null;
+            }, 2000);
+          } catch (err) {
+            // 降级方案
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+              document.execCommand('copy');
+              const type = text.includes('application/json') ? 'json' : 'file';
+              dialogs.value.api.copied = type;
+              showToast('已复制到剪贴板', 'info');
+              setTimeout(() => {
+                dialogs.value.api.copied = null;
+              }, 2000);
+            } catch (e) {
+              showToast('复制失败', 'error');
+            }
+            document.body.removeChild(textarea);
+          }
+        };
+
+        const moveFile = async ({ from, to }) => {
+          try {
+            const data = await apiFetch('/api/move', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ from, to })
+            });
+
+            // 立即更新本地文件树显示
+            const fileName = from.includes('/') ? from.substring(from.lastIndexOf('/') + 1) : from;
+            const newPath = data.newPath || `${to}/${fileName}`;
+
+            // 从 files 中移除旧位置的文件
+            const removeFromTree = (items, path) => {
+              for (let i = 0; i < items.length; i++) {
+                if (items[i].path === path && !items[i].isDirectory) {
+                  items.splice(i, 1);
+                  return true;
+                }
+                if (items[i].children && removeFromTree(items[i].children, path)) {
+                  return true;
+                }
+              }
+              return false;
+            };
+
+            // 在新位置添加文件
+            const addToTree = (items, path, name) => {
+              const pathParts = path.split('/');
+              const dirName = pathParts[0];
+              const remainingPath = pathParts.slice(1).join('/');
+
+              for (const item of items) {
+                if (item.isDirectory && item.path === dirName) {
+                  if (remainingPath) {
+                    if (!item.children) item.children = [];
+                    return addToTree(item.children, remainingPath, name);
+                  } else {
+                    item.children.push({ name, path, isDirectory: false });
+                    return true;
+                  }
+                }
+              }
+              return false;
+            };
+
+            // 更新文件树
+            const newFiles = [...files.value];
+            removeFromTree(newFiles, from);
+            addToTree(newFiles, to, fileName);
+            files.value = newFiles;
+
+            // 添加到 modified 列表
+            if (!modified.value.includes(newPath)) {
+              modified.value.push(newPath);
+            }
+
+            // 如果当前打开的是被移动的文件，关闭它
+            if (currentFile.value === from) {
+              currentFile.value = null;
+              content.value = '';
+              originalContent.value = '';
+            }
+
+            showToast('文件已移动，请部署后生效', 'success');
+          } catch (error) {
+            showToast('移动失败', 'error');
+          }
+        };
+
+        const revertFileChange = async (filePath) => {
+          try {
+            await apiFetch(`/api/temp/${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+
+            // 从 modified 列表移除
+            modified.value = modified.value.filter(p => p !== filePath);
+
+            // 如果当前打开的是被撤销的文件，重新加载
+            if (currentFile.value === filePath) {
+              const data = await apiFetch(`/api/file/${encodeURIComponent(filePath)}`);
+              content.value = data.content || '';
+              originalContent.value = data.content || '';
+            }
+
+            showToast('修改已取消', 'info');
+          } catch (error) {
+            showToast('取消失败', 'error');
+          }
+        };
+
+        const setCurrentDir = (dir) => {
+          currentDir.value = dir;
         };
 
         const togglePreview = () => {
@@ -1066,6 +1447,7 @@
           loadFiles,
           openFile,
           saveFile,
+          revertFile,
           showDeleteModal,
           confirmDelete,
           showDeployModal,
@@ -1075,6 +1457,10 @@
           showNewFolderModal,
           confirmNewFolder,
           showApiModal,
+          copyToApi,
+          moveFile,
+          revertFileChange,
+          setCurrentDir,
           togglePreview,
           onInput
         };
