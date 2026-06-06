@@ -391,7 +391,7 @@ function deployFiles() {
 // 外部上传 API（供外部工具调用）
 app.post('/api/upload', (req, res) => {
   try {
-    const { path: filePath, content, deploy } = req.body;
+    const { path: filePath, content } = req.body;
 
     if (!filePath) {
       return res.status(400).json({ error: '缺少 path 参数' });
@@ -404,14 +404,12 @@ app.post('/api/upload', (req, res) => {
     // 保存到临时目录
     writeFile(filePath, content);
 
-    let deployed = null;
-    if (deploy) {
-      deployed = deployFiles();
-    }
+    // 默认直接部署
+    const deployed = deployFiles();
 
     res.json({
       success: true,
-      message: deployed ? '文件上传并部署成功' : '文件上传成功',
+      message: `文件已部署`,
       path: filePath,
       deployed
     });
@@ -443,15 +441,12 @@ app.post('/api/upload/file', upload.single('file'), (req, res) => {
     // 保存文件内容
     fs.writeFileSync(fullPath, req.file.buffer);
 
-    const deploy = req.body.deploy === 'true' || req.body.deploy === true;
-    let deployed = null;
-    if (deploy) {
-      deployed = deployFiles();
-    }
+    // 默认直接部署
+    const deployed = deployFiles();
 
     res.json({
       success: true,
-      message: deployed ? '文件上传并部署成功' : '文件上传成功',
+      message: `文件已部署`,
       path: filePath,
       fileName: fileName,
       deployed
