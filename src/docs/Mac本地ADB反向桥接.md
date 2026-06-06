@@ -1,4 +1,4 @@
-# Mac 本地 ADB 反向桥接到 zj
+# Mac 本地 ADB 反向桥接到 linux服务器
 
 适用场景：你手边的 Mac 用 USB 连着 Android 设备，希望在 zj 主机上用 `adb` 直接看到 / 操作这台设备。Mac 通常在 NAT 后没公网入口（家用宽带 / 公司网），不能被 zj 主动 SSH 连入。
 
