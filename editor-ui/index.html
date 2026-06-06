@@ -532,6 +532,33 @@
       to { transform: rotate(360deg); }
     }
 
+    /* === API Info === */
+    .api-info {
+      font-size: 12px;
+    }
+
+    .api-endpoint {
+      background: var(--bg-tertiary);
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      color: var(--accent);
+      word-break: break-all;
+      margin-bottom: 8px;
+    }
+
+    .api-code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
     /* === Toastify === */
     .toastify {
       font-family: var(--font-sans) !important;
@@ -566,6 +593,11 @@
       <div class="sidebar-header">
         <h1>MkNexus</h1>
         <div class="sidebar-actions">
+          <button class="btn-icon" @click="showApiModal" title="API接口">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </button>
           <button class="btn-icon" @click="showNewFileModal" title="新建文件">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 5v14M5 12h14"/>
@@ -693,6 +725,27 @@
         </div>
       </div>
     </div>
+
+    <!-- API Info Dialog -->
+    <div v-if="dialogs.api.show" class="dialog-overlay" @click.self="dialogs.api.show = false">
+      <div class="dialog" style="max-width: 480px;">
+        <h3>API 接口</h3>
+        <div class="api-info">
+          <p style="margin-bottom: 8px; color: var(--text-secondary);">JSON 方式（path 含文件名）：</p>
+          <pre class="api-code">{{ dialogs.api.jsonExample }}</pre>
+
+          <p style="margin: 16px 0 8px; color: var(--text-secondary);">文件方式（path 是目录名）：</p>
+          <pre class="api-code">{{ dialogs.api.fileExample }}</pre>
+
+          <p style="margin: 16px 0 4px; color: var(--text-muted); font-size: 11px;">
+            注：上传后自动部署，无需额外操作
+          </p>
+        </div>
+        <div class="dialog-actions">
+          <button class="btn" @click="dialogs.api.show = false">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://www.haoaiganfan.top/libs/vue@3.5.17.js"></script>
@@ -764,7 +817,13 @@
           delete: { show: false, path: '' },
           deploy: { show: false },
           newFile: { show: false, name: '' },
-          newFolder: { show: false, name: '' }
+          newFolder: { show: false, name: '' },
+          api: {
+            show: false,
+            uploadUrl: '',
+            jsonExample: '',
+            fileExample: ''
+          }
         });
 
         const newFileInput = ref(null);
@@ -955,6 +1014,19 @@
           }
         };
 
+        const showApiModal = () => {
+          const baseUrl = window.location.origin + API;
+          const jsonUrl = baseUrl + '/api/upload';
+          const fileUrl = baseUrl + '/api/upload/file';
+          dialogs.value.api.jsonExample = `curl -X POST ${jsonUrl} \\
+  -H "Content-Type: application/json" \\
+  -d '{"path":"docs/test.md","content":"# Hello World"}'`;
+          dialogs.value.api.fileExample = `curl -X POST ${fileUrl} \\
+  -F "file=@./test.md" \\
+  -F "path=docs"`;
+          dialogs.value.api.show = true;
+        };
+
         const togglePreview = () => {
           isPreviewMode.value = !isPreviewMode.value;
         };
@@ -1002,6 +1074,7 @@
           confirmNewFile,
           showNewFolderModal,
           confirmNewFolder,
+          showApiModal,
           togglePreview,
           onInput
         };
