@@ -74,7 +74,9 @@ const state = {
   files: [],
   currentFile: null,
   currentDir: '',
-  isPreviewMode: false
+  isPreviewMode: false,
+  modified: [],
+  changes: []
 };
 
 // ==================== DOM 元素 ====================
@@ -89,7 +91,9 @@ const dom = {
   newFileDialog: document.getElementById('newFileDialog'),
   newFolderDialog: document.getElementById('newFolderDialog'),
   renameDialog: document.getElementById('renameDialog'),
-  deleteDialog: document.getElementById('deleteDialog')
+  deleteDialog: document.getElementById('deleteDialog'),
+  modifiedIndicator: document.getElementById('modifiedIndicator'),
+  deployBtn: document.getElementById('deployBtn')
 };
 
 // ==================== 工具函数 ====================
@@ -123,9 +127,21 @@ async function loadFiles() {
   try {
     const data = await apiFetch('/api/files');
     state.files = data.files || [];
+    state.modified = data.modified || [];
+    state.changes = data.changes || [];
     renderFileTree();
+    updateModifiedIndicator();
   } catch (error) {
     dom.fileTree.innerHTML = '<div class="empty-state">加载失败</div>';
+  }
+}
+
+function updateModifiedIndicator() {
+  if (state.modified.length > 0) {
+    dom.modifiedIndicator.style.display = 'flex';
+    dom.modifiedIndicator.querySelector('.modified-count').textContent = state.modified.length;
+  } else {
+    dom.modifiedIndicator.style.display = 'none';
   }
 }
 
@@ -137,6 +153,7 @@ function renderFileTree(items = state.files, level = 0) {
 
   const html = items.map(item => {
     const isActive = state.currentFile === item.path;
+    const isModified = state.modified.includes(item.path);
     const indent = level * 16;
 
     if (item.isDirectory) {
@@ -151,12 +168,13 @@ function renderFileTree(items = state.files, level = 0) {
       `;
     } else {
       return `
-        <div class="tree-item ${isActive ? 'active' : ''}" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="file">
+        <div class="tree-item ${isActive ? 'active' : ''} ${isModified ? 'modified' : ''}" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
           </svg>
           <span class="tree-name">${item.name}</span>
+          ${isModified ? '<span class="modified-dot"></span>' : ''}
           <div class="tree-actions">
             <button class="btn-delete" data-path="${item.path}" title="删除">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
@@ -175,6 +193,8 @@ function renderFileTree(items = state.files, level = 0) {
 
 function renderFileTreeItems(items, level) {
   return items.map(item => {
+    const isActive = state.currentFile === item.path;
+    const isModified = state.modified.includes(item.path);
     const indent = level * 16;
     if (item.isDirectory) {
       return `
@@ -188,12 +208,13 @@ function renderFileTreeItems(items, level) {
       `;
     } else {
       return `
-        <div class="tree-item" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="file">
+        <div class="tree-item ${isActive ? 'active' : ''} ${isModified ? 'modified' : ''}" style="padding-left: ${8 + indent}px" data-path="${item.path}" data-type="file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
           </svg>
           <span class="tree-name">${item.name}</span>
+          ${isModified ? '<span class="modified-dot"></span>' : ''}
           <div class="tree-actions">
             <button class="btn-delete" data-path="${item.path}" title="删除">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
@@ -254,6 +275,9 @@ async function saveFile() {
 
     dom.fileStatus.textContent = state.currentFile;
     dom.fileStatus.classList.remove('modified');
+
+    // 重新加载文件列表以更新 modified 状态
+    await loadFiles();
     toast('已保存', 'success');
   } catch (error) {
     toast('保存失败', 'error');
@@ -324,6 +348,26 @@ async function createFolder() {
   }
 }
 
+async function deploy() {
+  if (state.modified.length === 0) {
+    toast('没有需要部署的文件', 'info');
+    return;
+  }
+
+  const confirmed = confirm(`确定要部署 ${state.modified.length} 个文件吗？`);
+  if (!confirmed) return;
+
+  try {
+    const data = await apiFetch('/api/deploy', { method: 'POST' });
+    if (data.success) {
+      await loadFiles();
+      toast(data.message || '部署成功', 'success');
+    }
+  } catch (error) {
+    toast('部署失败: ' + error.message, 'error');
+  }
+}
+
 // ==================== 预览功能 ====================
 function updatePreview() {
   dom.preview.innerHTML = Markdown.parse(dom.editor.value);
@@ -373,6 +417,8 @@ document.getElementById('newFolderBtn').addEventListener('click', () => {
 document.getElementById('refreshBtn').addEventListener('click', loadFiles);
 
 document.getElementById('saveBtn').addEventListener('click', saveFile);
+
+dom.deployBtn.addEventListener('click', deploy);
 
 document.getElementById('previewToggle').addEventListener('click', togglePreview);
 
