@@ -30,6 +30,7 @@
 
       --radius-sm: 6px;
       --radius-md: 8px;
+      --radius-lg: 12px;
     }
 
     body {
@@ -443,6 +444,61 @@
       padding: 0;
     }
 
+    /* === Dialog === */
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .dialog {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      width: 90vw;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .dialog h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .dialog input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .dialog input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .dialog-message {
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     /* === Loading === */
     .loading {
       display: flex;
@@ -474,6 +530,13 @@
 
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+
+    /* === Toastify === */
+    .toastify {
+      font-family: var(--font-sans) !important;
+      border-radius: var(--radius-md) !important;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important;
     }
 
     /* === Scrollbar === */
@@ -524,7 +587,7 @@
 
       <div v-if="modified.length > 0" class="modified-indicator">
         <span class="modified-count">{{ modified.length }}</span> 个文件待部署
-        <button class="btn-deploy" @click="deploy">部署</button>
+        <button class="btn-deploy" @click="showDeployModal">部署</button>
       </div>
 
       <div class="file-tree">
@@ -538,7 +601,7 @@
             :current-file="currentFile"
             :modified="modified"
             @open="openFile"
-            @delete="deleteFile">
+            @delete="showDeleteModal">
           </tree-item>
         </template>
       </div>
@@ -572,6 +635,64 @@
         </div>
       </div>
     </main>
+
+    <!-- Delete Confirm Dialog -->
+    <div v-if="dialogs.delete.show" class="dialog-overlay" @click.self="dialogs.delete.show = false">
+      <div class="dialog">
+        <h3>确认删除</h3>
+        <p class="dialog-message">确定要删除 {{ dialogs.delete.path }} 吗？此操作不可撤销。</p>
+        <div class="dialog-actions">
+          <button class="btn" @click="dialogs.delete.show = false">取消</button>
+          <button class="btn btn-primary" style="background: var(--danger)" @click="confirmDelete">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deploy Confirm Dialog -->
+    <div v-if="dialogs.deploy.show" class="dialog-overlay" @click.self="dialogs.deploy.show = false">
+      <div class="dialog">
+        <h3>确认部署</h3>
+        <p class="dialog-message">确定要部署 {{ modified.length }} 个文件吗？这将把修改同步到正式目录。</p>
+        <div class="dialog-actions">
+          <button class="btn" @click="dialogs.deploy.show = false">取消</button>
+          <button class="btn btn-primary" @click="confirmDeploy">部署</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New File Dialog -->
+    <div v-if="dialogs.newFile.show" class="dialog-overlay" @click.self="dialogs.newFile.show = false">
+      <div class="dialog">
+        <h3>新建文件</h3>
+        <input
+          v-model="dialogs.newFile.name"
+          @keyup.enter="confirmNewFile"
+          placeholder="文件名.md"
+          ref="newFileInput"
+          autofocus>
+        <div class="dialog-actions">
+          <button class="btn" @click="dialogs.newFile.show = false">取消</button>
+          <button class="btn btn-primary" @click="confirmNewFile">创建</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Folder Dialog -->
+    <div v-if="dialogs.newFolder.show" class="dialog-overlay" @click.self="dialogs.newFolder.show = false">
+      <div class="dialog">
+        <h3>新建目录</h3>
+        <input
+          v-model="dialogs.newFolder.name"
+          @keyup.enter="confirmNewFolder"
+          placeholder="目录名"
+          ref="newFolderInput"
+          autofocus>
+        <div class="dialog-actions">
+          <button class="btn" @click="dialogs.newFolder.show = false">取消</button>
+          <button class="btn btn-primary" @click="confirmNewFolder">创建</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://www.haoaiganfan.top/libs/vue@3.5.17.js"></script>
@@ -580,7 +701,7 @@
   <script src="https://www.haoaiganfan.top/libs/toastify.min.js"></script>
 
   <script>
-    const { createApp, ref, computed, watch, onMounted } = Vue;
+    const { createApp, ref, computed, nextTick, onMounted } = Vue;
 
     // Tree Item Component
     const TreeItem = {
@@ -638,6 +759,17 @@
         const isPreviewMode = ref(false);
         const loading = ref(true);
 
+        // Dialogs
+        const dialogs = ref({
+          delete: { show: false, path: '' },
+          deploy: { show: false },
+          newFile: { show: false, name: '' },
+          newFolder: { show: false, name: '' }
+        });
+
+        const newFileInput = ref(null);
+        const newFolderInput = ref(null);
+
         // Computed
         const isModified = computed(() => content.value !== originalContent.value);
         const renderedContent = computed(() => {
@@ -669,7 +801,9 @@
               duration: 3000,
               gravity: 'top',
               position: 'right',
-              style: { background: bgColor }
+              style: { background: bgColor },
+              stopOnFocus: true,
+              offset: { x: 16, y: 16 }
             }).show();
           } else {
             alert(message);
@@ -721,37 +855,57 @@
           }
         };
 
-        const deleteFile = (path) => {
-          if (!confirm(`确定要删除 ${path} 吗？`)) return;
-
-          apiFetch(`/api/file/${encodeURIComponent(path)}`, { method: 'POST' })
-            .then(async () => {
-              if (currentFile.value === path) {
-                currentFile.value = null;
-                content.value = '';
-                originalContent.value = '';
-              }
-              await loadFiles();
-              showToast('已删除', 'success');
-            })
-            .catch(() => showToast('删除失败', 'error'));
+        const showDeleteModal = (path) => {
+          dialogs.value.delete.show = true;
+          dialogs.value.delete.path = path;
         };
 
-        const deploy = () => {
+        const confirmDelete = async () => {
+          const path = dialogs.value.delete.path;
+          dialogs.value.delete.show = false;
+
+          try {
+            await apiFetch(`/api/file/${encodeURIComponent(path)}`, { method: 'DELETE' });
+
+            if (currentFile.value === path) {
+              currentFile.value = null;
+              content.value = '';
+              originalContent.value = '';
+            }
+            await loadFiles();
+            showToast('已删除', 'success');
+          } catch (error) {
+            showToast('删除失败', 'error');
+          }
+        };
+
+        const showDeployModal = () => {
           if (modified.value.length === 0) return;
+          dialogs.value.deploy.show = true;
+        };
 
-          if (!confirm(`确定要部署 ${modified.value.length} 个文件吗？`)) return;
+        const confirmDeploy = async () => {
+          dialogs.value.deploy.show = false;
 
-          apiFetch('/api/deploy', { method: 'POST' })
-            .then(async (data) => {
-              await loadFiles();
-              showToast(data.message || '部署成功', 'success');
-            })
-            .catch(() => showToast('部署失败', 'error'));
+          try {
+            const data = await apiFetch('/api/deploy', { method: 'POST' });
+            await loadFiles();
+            showToast(data.message || '部署成功', 'success');
+          } catch (error) {
+            showToast('部署失败', 'error');
+          }
         };
 
         const showNewFileModal = () => {
-          const name = prompt('文件名 (需以 .md 结尾):');
+          dialogs.value.newFile.name = '';
+          dialogs.value.newFile.show = true;
+          nextTick(() => {
+            if (newFileInput.value) newFileInput.value.focus();
+          });
+        };
+
+        const confirmNewFile = async () => {
+          const name = dialogs.value.newFile.name.trim();
           if (!name) return;
 
           if (!name.endsWith('.md')) {
@@ -759,32 +913,46 @@
             return;
           }
 
-          apiFetch(`/api/new/${encodeURIComponent(currentDir.value)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-          })
-            .then(async (data) => {
-              await loadFiles();
-              openFile(data.path);
-            })
-            .catch(() => showToast('创建失败', 'error'));
+          try {
+            const data = await apiFetch(`/api/new/${encodeURIComponent(currentDir.value)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name })
+            });
+
+            dialogs.value.newFile.show = false;
+            await loadFiles();
+            openFile(data.path);
+          } catch (error) {
+            showToast('创建失败', 'error');
+          }
         };
 
         const showNewFolderModal = () => {
-          const name = prompt('目录名:');
+          dialogs.value.newFolder.name = '';
+          dialogs.value.newFolder.show = true;
+          nextTick(() => {
+            if (newFolderInput.value) newFolderInput.value.focus();
+          });
+        };
+
+        const confirmNewFolder = async () => {
+          const name = dialogs.value.newFolder.name.trim();
           if (!name) return;
 
-          apiFetch(`/api/folder/${encodeURIComponent(currentDir.value)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-          })
-            .then(async () => {
-              await loadFiles();
-              showToast('目录已创建', 'success');
-            })
-            .catch(() => showToast('创建失败', 'error'));
+          try {
+            await apiFetch(`/api/folder/${encodeURIComponent(currentDir.value)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name })
+            });
+
+            dialogs.value.newFolder.show = false;
+            await loadFiles();
+            showToast('目录已创建', 'success');
+          } catch (error) {
+            showToast('创建失败', 'error');
+          }
         };
 
         const togglePreview = () => {
@@ -792,9 +960,7 @@
         };
 
         const onInput = () => {
-          if (isPreviewMode.value) {
-            // Preview will auto-update via computed
-          }
+          // Preview updates via computed
         };
 
         // Keyboard shortcuts
@@ -803,6 +969,9 @@
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
               e.preventDefault();
               saveFile();
+            }
+            if (e.key === 'Escape') {
+              Object.values(dialogs.value).forEach(d => d.show = false);
             }
           });
         });
@@ -819,13 +988,20 @@
           isModified,
           renderedContent,
           loading,
+          dialogs,
+          newFileInput,
+          newFolderInput,
           loadFiles,
           openFile,
           saveFile,
-          deleteFile,
-          deploy,
+          showDeleteModal,
+          confirmDelete,
+          showDeployModal,
+          confirmDeploy,
           showNewFileModal,
+          confirmNewFile,
           showNewFolderModal,
+          confirmNewFolder,
           togglePreview,
           onInput
         };
