@@ -335,15 +335,43 @@ app.post('/api/rename/:path(*)', (req, res) => {
   }
 });
 
-// 删除文件
+// 删除文件或目录
 app.delete('/api/file/:path(*)', (req, res) => {
   try {
     const filePath = req.params.path;
+    const tempPath = path.join(TEMP_DIR, filePath);
+    const officialPath = path.join(DOCS_DIR, filePath);
 
-    // 同时删除临时目录和正式目录的文件
-    deleteFile(filePath);
+    // 判断是文件还是目录
+    const isDirectory = fs.existsSync(officialPath) ?
+      fs.statSync(officialPath).isDirectory() :
+      (fs.existsSync(tempPath) && fs.statSync(tempPath).isDirectory());
 
-    res.json({ success: true, message: '文件已删除' });
+    // 添加到删除列表
+    const deleteListPath = path.join(TEMP_DIR, '.delete-list');
+    let deleteList = [];
+    if (fs.existsSync(deleteListPath)) {
+      deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
+    }
+    if (!deleteList.includes(filePath)) {
+      deleteList.push(filePath);
+    }
+    fs.writeFileSync(deleteListPath, JSON.stringify(deleteList, null, 2));
+
+    // 删除临时文件/目录
+    if (fs.existsSync(tempPath)) {
+      if (isDirectory) {
+        fs.rmSync(tempPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(tempPath);
+      }
+    }
+
+    // 自动部署
+    const deployed = deployFiles();
+
+    const message = isDirectory ? '目录已删除并部署' : '文件已删除并部署';
+    res.json({ success: true, message, deployed, isDirectory });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -371,10 +399,15 @@ function deployFiles() {
   if (fs.existsSync(deleteListPath)) {
     const deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
 
-    for (const file of deleteList) {
-      const filePath = path.join(DOCS_DIR, file);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+    for (const item of deleteList) {
+      const itemPath = path.join(DOCS_DIR, item);
+      if (fs.existsSync(itemPath)) {
+        const stat = fs.statSync(itemPath);
+        if (stat.isDirectory()) {
+          fs.rmSync(itemPath, { recursive: true, force: true });
+        } else {
+          fs.unlinkSync(itemPath);
+        }
       }
     }
 
@@ -391,7 +424,7 @@ function deployFiles() {
 // 外部上传 API（供外部工具调用）
 app.post('/api/upload', (req, res) => {
   try {
-    const { path: filePath, content } = req.body;
+    const { path: filePath, content, deploy } = req.body;
 
     if (!filePath) {
       return res.status(400).json({ error: '缺少 path 参数' });
@@ -404,12 +437,15 @@ app.post('/api/upload', (req, res) => {
     // 保存到临时目录
     writeFile(filePath, content);
 
-    // 默认直接部署
-    const deployed = deployFiles();
+    // 只有 deploy=1 时才部署
+    let deployed = null;
+    if (deploy === 1 || deploy === '1') {
+      deployed = deployFiles();
+    }
 
     res.json({
       success: true,
-      message: `文件已部署`,
+      message: deployed ? '文件已部署' : '文件已保存',
       path: filePath,
       deployed
     });
@@ -441,12 +477,15 @@ app.post('/api/upload/file', upload.single('file'), (req, res) => {
     // 保存文件内容
     fs.writeFileSync(fullPath, req.file.buffer);
 
-    // 默认直接部署
-    const deployed = deployFiles();
+    // 只有 deploy=1 时才部署
+    let deployed = null;
+    if (req.body.deploy === '1' || req.body.deploy === 1) {
+      deployed = deployFiles();
+    }
 
     res.json({
       success: true,
-      message: `文件已部署`,
+      message: deployed ? '文件已部署' : '文件已保存',
       path: filePath,
       fileName: fileName,
       deployed
@@ -465,9 +504,13 @@ app.post('/api/move', (req, res) => {
       return res.status(400).json({ error: '缺少 from 或 to 参数' });
     }
 
+    // 获取文件名
+    const fileName = from.includes('/') ? from.substring(from.lastIndexOf('/') + 1) : from;
+    const newPath = to ? `${to}/${fileName}` : fileName;
+
     // 检查是否移动到同一个目录
     const fromDir = from.includes('/') ? from.substring(0, from.lastIndexOf('/')) : '';
-    const toDir = to.includes('/') ? to.substring(0, to.lastIndexOf('/')) : '';
+    const toDir = to;
 
     if (fromDir === toDir) {
       return res.json({
@@ -476,7 +519,23 @@ app.post('/api/move', (req, res) => {
       });
     }
 
-    // 将原文件路径添加到 delete-list（部署时删除）
+    // 读取原文件内容（从正式目录）
+    const officialPath = path.join(DOCS_DIR, from);
+    let content = '';
+    if (fs.existsSync(officialPath)) {
+      content = fs.readFileSync(officialPath, 'utf-8');
+    } else {
+      // 如果正式目录不存在，尝试从临时目录读取
+      const tempPath = path.join(TEMP_DIR, from);
+      if (fs.existsSync(tempPath)) {
+        content = fs.readFileSync(tempPath, 'utf-8');
+      }
+    }
+
+    // 在新位置创建文件（写入临时目录，这样 modified 会包含它）
+    writeFile(newPath, content);
+
+    // 将原文件路径添加到 delete-list（部署时删除旧位置）
     const deleteListPath = path.join(TEMP_DIR, '.delete-list');
     let deleteList = [];
     if (fs.existsSync(deleteListPath)) {
@@ -489,7 +548,8 @@ app.post('/api/move', (req, res) => {
 
     res.json({
       success: true,
-      message: '文件已移动，请部署后生效'
+      message: '文件已移动，请部署后生效',
+      newPath
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -516,6 +576,22 @@ app.post('/api/clear', (req, res) => {
     fs.rmSync(TEMP_DIR, { recursive: true, force: true });
     fs.mkdirSync(TEMP_DIR, { recursive: true });
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 取消单个文件的修改
+app.delete('/api/temp/:path(*)', (req, res) => {
+  try {
+    const filePath = req.params.path;
+    const tempPath = path.join(TEMP_DIR, filePath);
+
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+
+    res.json({ success: true, message: '修改已取消' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
