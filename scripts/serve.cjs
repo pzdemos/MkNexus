@@ -157,7 +157,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  🔷 MkNexus`);
   console.log(`  ─────────────────────`);
   console.log(`  服务地址: http://localhost:${PORT}`);
