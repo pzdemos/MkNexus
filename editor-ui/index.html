@@ -1,1471 +1,1026 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MkNexus Editor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>MkNexus Editor</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg:        #0d1117;
+    --bg-2:      #010409;
+    --panel:     #161b22;
+    --panel-2:   #1c232c;
+    --border:    #30363d;
+    --border-2:  #21262d;
+    --text:      #e6edf3;
+    --text-dim:  #8b949e;
+    --text-mute: #6e7681;
+    --accent:    #58a6ff;
+    --accent-2:  #3fb950;
+    --warn:      #d29922;
+    --danger:    #f85149;
+    --purple:    #bc8cff;
+    --radius:    10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", ui-monospace, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font); font-size: 13px; color: var(--text);
+    background: var(--bg); overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input { font-family: inherit; }
 
-    :root {
-      --bg-primary: #0a0a0b;
-      --bg-secondary: #111113;
-      --bg-tertiary: #1a1a1d;
-      --border: #2a2a2e;
-      --border-hover: #3a3a3e;
-      --text-primary: #e4e4e7;
-      --text-secondary: #a1a1aa;
-      --text-muted: #71717a;
-      --accent: #22c55e;
-      --accent-dim: rgba(34, 197, 94, 0.15);
-      --danger: #ef4444;
-      --warning: #f59e0b;
+  /* ===== App shell ===== */
+  #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
-      --font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
-      --font-serif: 'Source Serif 4', Georgia, serif;
-      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  .topbar {
+    height: 48px; flex: none; display: flex; align-items: center; gap: 12px;
+    padding: 0 14px; background: var(--bg-2); border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 14px; }
+  .brand .logo {
+    width: 26px; height: 26px; border-radius: 7px; flex: none;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: grid; place-items: center;
+  }
+  .brand .logo svg { width: 15px; height: 15px; color: #fff; }
+  .crumb { color: var(--text-mute); font-size: 12.5px; font-family: var(--mono); }
+  .crumb b { color: var(--text); font-weight: 600; }
+  .dirty-dot { color: var(--warn); font-weight: 700; margin-left: 2px; }
 
-      --radius-sm: 6px;
-      --radius-md: 8px;
-      --radius-lg: 12px;
+  .topbar .spacer { flex: 1; }
+
+  .seg {
+    display: inline-flex; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 2px;
+  }
+  .seg button {
+    padding: 5px 12px; font-size: 12px; color: var(--text-dim); border-radius: 6px;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .seg button.active { background: var(--panel-2); color: var(--text); }
+  .seg button:hover:not(.active) { color: var(--text); }
+  .seg svg { width: 14px; height: 14px; }
+
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center;
+    color: var(--text-dim); border: 1px solid transparent;
+  }
+  .icon-btn:hover { background: var(--panel); color: var(--text); border-color: var(--border); }
+  .icon-btn svg { width: 15px; height: 15px; }
+  .icon-btn.save.dirty { color: var(--warn); }
+
+  .btn {
+    padding: 6px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent;
+  }
+  .btn.primary { background: var(--accent-2); color: #00150a; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.primary.loading { background: var(--accent-2); opacity: .85; cursor: progress; }
+  .btn-spinner {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 2px solid rgba(0,21,10,.3); border-top-color: #00150a;
+    animation: btnspin .6s linear infinite; display: inline-block;
+  }
+  @keyframes btnspin { to { transform: rotate(360deg); } }
+  .btn.primary:disabled { opacity: .45; cursor: default; filter: none; }
+  .btn.ghost { background: var(--panel); border-color: var(--border); color: var(--text); }
+  .btn.ghost:hover { background: var(--panel-2); }
+  .btn.danger { background: rgba(248,81,73,.12); color: var(--danger); border-color: rgba(248,81,73,.3); }
+  .btn.danger:hover { background: rgba(248,81,73,.2); }
+  .badge-count {
+    min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
+    background: rgba(0,0,0,.25); color: #00150a; font-size: 11px; font-weight: 700;
+    display: inline-grid; place-items: center;
+  }
+  .btn.primary:disabled .badge-count { background: var(--panel); color: var(--text-mute); }
+
+  /* ===== Body 3-pane ===== */
+  .body { flex: 1; display: flex; min-height: 0; }
+
+  .sidebar {
+    width: 264px; min-width: 180px; max-width: 480px; flex: none;
+    background: var(--bg-2); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .side-head { padding: 10px; border-bottom: 1px solid var(--border-2); flex: none; }
+  .side-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+  .side-actions .icon-btn { width: 28px; height: 28px; border: 1px solid var(--border-2); background: var(--panel); }
+  .side-actions .icon-btn:hover { background: var(--panel-2); }
+  .side-actions .hint { font-size: 11px; color: var(--text-mute); align-self: center; margin-left: 2px; }
+
+  .search {
+    width: 100%; padding: 7px 10px 7px 30px; border-radius: 7px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    font-size: 12.5px; outline: none;
+  }
+  .search:focus { border-color: var(--accent); }
+  .search-wrap { position: relative; }
+  .search-wrap svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-mute); }
+
+  .tree { flex: 1; overflow-y: auto; padding: 6px 4px; }
+  .tree-row {
+    display: flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 6px;
+    font-size: 12.5px; color: var(--text); cursor: pointer; user-select: none; position: relative;
+  }
+  .tree-row:hover { background: var(--panel); }
+  .tree-row.active { background: rgba(88,166,255,.15); }
+  .tree-row.drop-target { background: rgba(63,185,80,.18); outline: 1px solid var(--accent-2); }
+  .tree-row.is-dir { font-weight: 600; }
+  .tree-row.is-dir .label { color: var(--text); }
+  .tree-row.indent-1 { padding-left: 22px; }
+  .tree-row.indent-2 { padding-left: 38px; }
+  .tree-row.indent-3 { padding-left: 54px; }
+  .tree-row .chev { width: 14px; height: 14px; flex: none; color: var(--text-mute); transition: transform .12s; }
+  .tree-row .chev.open { transform: rotate(90deg); }
+  .tree-row .ficon { width: 15px; height: 15px; flex: none; color: var(--text-mute); }
+  .tree-row.is-dir .ficon { color: var(--accent); }
+  .tree-row .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tree-row.deleted .label { color: var(--text-mute); text-decoration: line-through; }
+  .ch-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .ch-dot.modified { background: var(--warn); }
+  .ch-dot.created  { background: var(--accent-2); }
+  .ch-dot.deleted  { background: var(--danger); }
+  .ch-dot.moved    { background: var(--purple); }
+  .row-del { width: 18px; height: 18px; opacity: 0; color: var(--text-mute); border-radius: 4px; display: grid; place-items: center; flex: none; }
+  .tree-row:hover .row-del { opacity: 1; }
+  .row-del:hover { color: var(--danger); background: var(--panel-2); }
+  .tree-empty { padding: 24px 14px; color: var(--text-mute); font-size: 12px; text-align: center; }
+
+  .side-foot {
+    flex: none; border-top: 1px solid var(--border-2); padding: 10px;
+    display: flex; flex-direction: column; gap: 8px; background: var(--bg-2);
+  }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-dim); }
+  .switch { position: relative; width: 32px; height: 18px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: .18s; }
+  .switch .slider::before { content: ""; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: #fff; border-radius: 50%; transition: .18s; }
+  .switch input:checked + .slider { background: var(--accent-2); }
+  .switch input:checked + .slider::before { transform: translateX(14px); }
+  .pending-bar {
+    font-size: 11.5px; color: var(--text-mute); display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; border-radius: 7px; transition: background .12s;
+  }
+  .pending-bar.clickable { cursor: pointer; color: var(--text-dim); }
+  .pending-bar.clickable:hover { background: var(--panel); }
+  .pending-bar b { color: var(--warn); }
+  .pending-summary { flex: 1; }
+  .pending-chev { color: var(--text-mute); flex: none; transition: transform .15s; }
+  .pending-chev.open { transform: rotate(180deg); }
+  .pending-deploy { color: var(--accent-2); font-weight: 600; flex: none; font-size: 11px; }
+  .pending-deploy:hover { text-decoration: underline; }
+  .pending-list {
+    max-height: 200px; overflow-y: auto; margin: 4px 0 6px;
+    background: var(--bg); border: 1px solid var(--border-2); border-radius: 8px; padding: 4px;
+  }
+  .pending-item {
+    display: flex; align-items: center; gap: 7px; padding: 5px 8px; border-radius: 6px;
+    font-size: 11.5px; cursor: pointer; transition: background .1s;
+  }
+  .pending-item:hover { background: var(--panel); }
+  .pending-item .ch-dot { flex: none; }
+  .pending-path { flex: 1; font-family: var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pending-tag { font-size: 10px; padding: 1px 6px; border-radius: 4px; flex: none; }
+  .pending-item.modified .pending-tag { background: rgba(210,153,34,.15); color: var(--warn); }
+  .pending-item.created  .pending-tag { background: rgba(63,185,80,.15);  color: var(--accent-2); }
+  .pending-item.deleted  .pending-tag { background: rgba(248,81,73,.15);  color: var(--danger); }
+  .pending-item.moved    .pending-tag { background: rgba(188,140,255,.15);color: var(--purple); }
+  .pending-revert { width: 18px; height: 18px; flex: none; color: var(--text-mute); border-radius: 4px; display: grid; place-items: center; opacity: 0; }
+  .pending-item:hover .pending-revert { opacity: 1; }
+  .pending-revert:hover { color: var(--danger); background: var(--panel-2); }
+  .pend-enter-active, .pend-leave-active { transition: all .2s ease; overflow: hidden; }
+  .pend-enter-from, .pend-leave-to { opacity: 0; max-height: 0; }
+
+  /* ===== Editor pane ===== */
+  .pane { display: flex; flex-direction: column; min-width: 0; }
+  .pane-editor { flex: 1; }
+  .pane-preview { display: flex; flex: none; border-left: 1px solid var(--border); background: var(--bg); min-width: 0; overflow: hidden; }
+  .pane-preview-inner { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+  .pane-head {
+    height: 32px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; border-bottom: 1px solid var(--border-2);
+    font-size: 11.5px; color: var(--text-mute); text-transform: uppercase; letter-spacing: .08em;
+    background: var(--bg-2);
+  }
+  .pane-head .ttl { flex: 1; }
+  #monaco { flex: 1; min-height: 0; }
+
+  .divider {
+    width: 6px; flex: none; cursor: col-resize; background: var(--bg-2);
+    position: relative; transition: background .12s;
+  }
+  .divider:hover, .divider.dragging { background: var(--accent); }
+
+  /* ===== Pipeline indicator (顶部栏中间) ===== */
+  .pipeline {
+    display: flex; align-items: center; gap: 0; flex: none;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 12px; height: 30px;
+    transition: border-color .25s;
+  }
+  .pipeline.done { border-color: rgba(63,185,80,.4); }
+  .pipeline.failed { border-color: rgba(248,81,73,.4); }
+  .pl-step { display: flex; align-items: center; gap: 5px; color: var(--text-mute); transition: color .25s; }
+  .pl-step.done { color: var(--accent-2); }
+  .pl-step.active { color: var(--accent); }
+  .pl-ico {
+    width: 18px; height: 18px; border-radius: 50%; flex: none;
+    display: grid; place-items: center;
+    background: var(--bg-2); border: 1px solid var(--border-2); color: inherit;
+  }
+  .pl-step.done .pl-ico { background: rgba(63,185,80,.15); border-color: rgba(63,185,80,.4); }
+  .pl-step.active .pl-ico { background: rgba(88,166,255,.15); border-color: rgba(88,166,255,.5); }
+  .pl-num { font-size: 10px; font-weight: 700; }
+  .pl-spin {
+    width: 11px; height: 11px; border-radius: 50%;
+    border: 1.5px solid rgba(88,166,255,.25); border-top-color: var(--accent);
+    animation: plspin .7s linear infinite;
+  }
+  @keyframes plspin { to { transform: rotate(360deg); } }
+  .pl-label { font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+  .pl-arrow { color: var(--border); flex: none; margin: 0 6px; transition: color .3s; }
+  .pl-arrow.lit { color: var(--accent-2); }
+  .pl-slide-enter-active, .pl-slide-leave-active { transition: all .3s ease; }
+  .pl-slide-enter-from, .pl-slide-leave-to { opacity: 0; transform: translateY(-6px); }
+
+  /* ===== Preview ===== */
+  .preview-body { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 28px 36px; line-height: 1.7; }
+  .preview-body h1, .preview-body h2, .preview-body h3 { margin: 22px 0 12px; line-height: 1.3; }
+  .preview-body h1 { font-size: 26px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .preview-body h2 { font-size: 21px; }
+  .preview-body h3 { font-size: 17px; }
+  .preview-body p { margin: 10px 0; }
+  .preview-body a { color: var(--accent); text-decoration: none; }
+  .preview-body a:hover { text-decoration: underline; }
+  .preview-body code { font-family: var(--mono); font-size: 12.5px; background: var(--panel); padding: 2px 6px; border-radius: 5px; }
+  .preview-body pre { background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 14px 0; }
+  .preview-body pre code { background: none; padding: 0; font-size: 12.5px; line-height: 1.6; }
+  .preview-body blockquote { border-left: 3px solid var(--accent); padding: 4px 14px; margin: 12px 0; color: var(--text-dim); background: var(--panel); border-radius: 0 6px 6px 0; }
+  .preview-body ul, .preview-body ol { margin: 10px 0; padding-left: 24px; }
+  .preview-body li { margin: 4px 0; }
+  .preview-body table { border-collapse: collapse; margin: 14px 0; width: 100%; }
+  .preview-body th, .preview-body td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; }
+  .preview-body th { background: var(--panel); }
+  .preview-body hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+  .preview-body img { max-width: 100%; border-radius: 8px; }
+
+  /* ===== Empty / Welcome ===== */
+  .welcome { flex: 1; display: grid; place-items: center; color: var(--text-mute); text-align: center; }
+  .welcome svg { width: 56px; height: 56px; opacity: .3; margin-bottom: 14px; }
+  .welcome h2 { font-size: 16px; color: var(--text-dim); font-weight: 500; margin-bottom: 4px; }
+
+  /* ===== Toast ===== */
+  .toasts { position: fixed; bottom: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--panel-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    color: var(--text); padding: 10px 16px; border-radius: 8px; font-size: 12.5px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4); animation: slideIn .2s ease; min-width: 200px;
+  }
+  .toast.ok { border-left-color: var(--accent-2); }
+  .toast.err { border-left-color: var(--danger); }
+  .toast.info { border-left-color: var(--accent); }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
+
+  /* ===== Modal ===== */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200;
+    display: grid; place-items: center; animation: fade .15s;
+  }
+  @keyframes fade { from { opacity: 0; } }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal h3 { font-size: 15px; margin-bottom: 14px; }
+  .modal input[type=text] {
+    width: 100%; padding: 9px 12px; border-radius: 7px; background: var(--bg-2);
+    border: 1px solid var(--border); color: var(--text); font-size: 13px; outline: none;
+  }
+  .modal input:focus { border-color: var(--accent); }
+  .modal .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .modal .muted { font-size: 12px; color: var(--text-mute); margin-top: 8px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; border: 2px solid var(--bg-2); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-mute); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ===== Mobile responsive (≤768px) ===== */
+  .mobile-hamburger { display: none; }
+  .drawer-backdrop {
+    position: fixed; left: 0; right: 0; top: 50px; bottom: 0;
+    background: rgba(0,0,0,.5); z-index: 40;
+    visibility: hidden; opacity: 0; pointer-events: none;
+    transition: opacity .22s, visibility .22s;
+  }
+
+  @media (max-width: 768px) {
+    /* Topbar compact */
+    .topbar { padding: 0 8px; gap: 6px; height: 50px; }
+    .brand { display: none; }
+    .mobile-hamburger { display: grid; }
+    .crumb {
+      flex: 1; min-width: 0; font-size: 11.5px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
+    .pipeline { display: none; }
+    .seg { padding: 2px; }
+    .seg button { padding: 6px 8px; font-size: 0; gap: 0; }
+    .seg svg { width: 16px; height: 16px; }
+    .seg button.seg-btn-split { display: none; }
 
-    body {
-      font-family: var(--font-sans);
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      height: 100vh;
-      height: 100dvh;
-      overflow: hidden;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
-    #app {
-      display: flex;
-      height: 100%;
-    }
-
-    /* === Sidebar === */
+    /* Sidebar becomes slide-in drawer */
     .sidebar {
-      width: 260px;
-      min-width: 260px;
-      background: var(--bg-secondary);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .sidebar-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sidebar-header h1 {
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .sidebar-actions {
-      display: flex;
-      gap: 4px;
-    }
-
-    .btn-icon {
-      width: 32px;
-      height: 32px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.15s ease;
-    }
-
-    .btn-icon:hover {
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-    }
-
-    .btn-icon svg {
-      width: 16px;
-      height: 16px;
-    }
-
-    /* Modified Indicator */
-    .modified-indicator {
-      padding: 12px 16px;
-      background: var(--accent-dim);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      color: var(--accent);
-    }
-
-    .modified-count {
-      font-weight: 600;
-    }
-
-    .btn-deploy {
-      padding: 6px 12px;
-      background: var(--accent);
-      border: none;
-      color: var(--bg-primary);
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .btn-deploy:hover {
-      background: #16a34a;
-    }
-
-    /* File Tree */
-    .file-tree {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px;
-    }
-
-    .tree-item {
-      display: flex;
-      align-items: center;
-      padding: 6px 8px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      user-select: none;
-      margin-bottom: 2px;
-    }
-
-    .tree-item:hover {
-      background: var(--bg-tertiary);
-    }
-
-    .tree-item.dragging {
-      opacity: 0.5;
-    }
-
-    .tree-item.drag-over {
-      background: var(--accent-dim);
-      border: 1px dashed var(--accent);
-    }
-
-    .tree-item.active {
-      background: var(--accent-dim);
-      color: var(--accent);
-    }
-
-    .tree-item.active svg {
-      color: var(--accent);
-    }
-
-    .tree-item.current-dir {
-      background: rgba(59, 130, 246, 0.15);
-      color: #3b82f6;
-    }
-
-    .tree-item.current-dir svg {
-      color: #3b82f6;
-    }
-
-    .tree-item.modified {
-      color: var(--warning);
-    }
-
-    .tree-item.modified svg {
-      color: var(--warning);
-    }
-
-    .tree-item svg {
-      width: 14px;
-      height: 14px;
-      color: var(--text-muted);
-      margin-right: 8px;
-      flex-shrink: 0;
-    }
-
-    .tree-name {
-      flex: 1;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .modified-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--warning);
-      border-radius: 50%;
-      margin-right: 6px;
-    }
-
-    .btn-revert {
-      width: 16px;
-      height: 16px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      border-radius: 4px;
-      cursor: pointer;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-left: 4px;
-    }
-
-    .btn-revert:hover {
-      color: var(--text-primary);
-      background: var(--bg-tertiary);
-    }
-
-    .btn-revert svg {
-      width: 12px;
-      height: 12px;
-    }
-
-    .tree-children {
-      margin-left: 16px;
-    }
-
-    .tree-folder {
-      font-weight: 500;
-    }
-
-    .tree-actions {
-      display: none;
-      gap: 4px;
-    }
-
-    .tree-item:hover .tree-actions {
-      display: flex;
-    }
-
-    .btn-delete {
-      width: 20px;
-      height: 20px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      border-radius: 4px;
-      cursor: pointer;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .btn-delete:hover {
-      color: var(--danger);
-    }
-
-    /* === Editor Area === */
-    .editor-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-
-    .editor-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--bg-secondary);
-    }
-
-    .file-status {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .file-status.modified {
-      color: var(--warning);
-    }
-
-    .editor-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn {
-      padding: 8px 16px;
-      border: 1px solid var(--border);
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 500;
-      font-family: inherit;
-    }
-
-    .btn:hover {
-      border-color: var(--border-hover);
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: var(--bg-primary);
-    }
-
-    .btn-primary:hover {
-      background: #16a34a;
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .editor-container {
-      flex: 1;
-      display: flex;
-      overflow: hidden;
-    }
-
-    .editor-pane,
-    .preview-pane {
-      flex: 1;
-      overflow: auto;
-      min-width: 0;
-    }
-
-    .editor-pane {
-      border-right: 1px solid var(--border);
-    }
-
-    #editor {
-      width: 100%;
-      height: 100%;
-      background: transparent;
-      border: none;
-      resize: none;
-      padding: 24px;
-      font-family: var(--font-mono);
-      font-size: 14px;
-      line-height: 1.7;
-      color: var(--text-primary);
-    }
-
-    #editor:focus {
-      outline: none;
-    }
-
-    /* === Preview === */
-    .preview-pane {
-      background: var(--bg-secondary);
-    }
-
-    .preview-content {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 24px 32px 64px;
-    }
-
-    .preview-content * {
-      max-width: 100%;
-    }
-
-    .preview-content h1,
-    .preview-content h2,
-    .preview-content h3,
-    .preview-content h4,
-    .preview-content h5,
-    .preview-content h6 {
-      font-family: var(--font-serif);
-      font-weight: 600;
-      line-height: 1.3;
-      margin-top: 32px;
-      margin-bottom: 16px;
-      color: var(--text-primary);
-    }
-
-    .preview-content h1 { font-size: 28px; }
-    .preview-content h2 { font-size: 22px; }
-    .preview-content h3 { font-size: 18px; }
-    .preview-content h4 { font-size: 16px; }
-
-    .preview-content p {
-      margin-bottom: 16px;
-      line-height: 1.7;
-    }
-
-    .preview-content code {
-      font-family: var(--font-mono);
-      font-size: 13px;
-      background: var(--bg-tertiary);
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: var(--accent);
-    }
-
-    .preview-content pre {
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 16px;
-      overflow-x: auto;
-      margin-bottom: 16px;
-    }
-
-    .preview-content pre code {
-      background: none;
-      padding: 0;
-      color: var(--text-primary);
-    }
-
-    .preview-content ul,
-    .preview-content ol {
-      margin-bottom: 16px;
-      padding-left: 24px;
-    }
-
-    .preview-content li {
-      margin-bottom: 6px;
-    }
-
-    .preview-content a {
-      color: var(--accent);
-    }
-
-    .preview-content blockquote {
-      border-left: 3px solid var(--accent);
-      padding-left: 16px;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
-
-    .preview-content hr {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 24px 0;
-    }
-
-    .preview-content table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 16px;
-    }
-
-    .preview-content th,
-    .preview-content td {
-      border: 1px solid var(--border);
-      padding: 8px 12px;
-      text-align: left;
-    }
-
-    .preview-content th {
-      background: var(--bg-tertiary);
-      font-weight: 600;
-    }
-
-    .preview-content img {
-      max-width: 100%;
-      border-radius: var(--radius-md);
-    }
-
-    .preview-content .hljs {
-      background: transparent;
-      padding: 0;
-    }
-
-    /* === Dialog === */
-    .dialog-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-
-    .dialog {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      padding: 24px;
-      width: 90vw;
-      max-width: 400px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    }
-
-    .dialog h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 16px;
-    }
-
-    .dialog input {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: var(--bg-tertiary);
-      color: var(--text-primary);
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-
-    .dialog input:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-
-    .dialog-message {
-      color: var(--text-secondary);
-      margin-bottom: 20px;
-      line-height: 1.6;
-    }
-
-    .dialog-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    /* === Loading === */
-    .loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      color: var(--text-muted);
-    }
-
-    .spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    .empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
-      padding: 32px;
-      text-align: center;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* === API Info === */
-    .api-info {
-      font-size: 12px;
-    }
-
-    .api-endpoint {
-      background: var(--bg-tertiary);
-      padding: 8px 10px;
-      border-radius: var(--radius-sm);
-      font-family: var(--font-mono);
-      color: var(--accent);
-      word-break: break-all;
-      margin-bottom: 8px;
-    }
-
-    .api-code {
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 10px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-secondary);
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    /* === Toastify === */
-    .toastify {
-      font-family: var(--font-sans) !important;
-      border-radius: var(--radius-md) !important;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
-      max-width: 280px !important;
-      padding: 10px 14px !important;
-      font-size: 12px !important;
-      line-height: 1.5 !important;
-      z-index: 2000 !important;
-      position: fixed !important;
-    }
-
-    /* === In-place Notification === */
-    .notification {
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      animation: slideDown 0.2s ease;
-    }
-
-    .notification.success {
-      background: var(--accent);
-      color: var(--bg-primary);
-    }
-
-    .notification.error {
-      background: var(--danger);
-      color: white;
-    }
-
-    .notification.info {
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border);
-      color: var(--text-primary);
-    }
-
-    @keyframes slideDown {
-      from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
-
-    /* === API Dialog === */
-    .api-row {
-      position: relative;
-      margin-bottom: 16px;
-    }
-
-    .api-copy-btn {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 24px;
-      height: 24px;
-      border: none;
-      background: var(--bg-tertiary);
-      color: var(--text-muted);
-      border-radius: 4px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .api-copy-btn:hover {
-      background: var(--border-hover);
-      color: var(--text-primary);
-    }
-
-    .api-copy-btn svg {
-      width: 12px;
-      height: 12px;
-    }
-
-    .api-copy-btn.copied {
-      background: var(--accent);
-      color: var(--bg-primary);
-    }
-
-    /* === Scrollbar === */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--border-hover);
-    }
-  </style>
+      position: fixed !important; left: 0; top: 50px; bottom: 0;
+      width: 86vw !important; max-width: 320px; min-width: 0 !important;
+      transform: translateX(-100%); transition: transform .22s ease;
+      z-index: 50;
+    }
+    .drawer-open .sidebar { transform: none; box-shadow: 4px 0 24px rgba(0,0,0,.5); }
+    .drawer-open .drawer-backdrop { visibility: visible; opacity: 1; pointer-events: auto; }
+
+    .divider { display: none; }
+
+    /* Panes */
+    .pane-preview { border-left: none; }
+    .pane-head { height: 36px; padding: 0 10px; }
+    .preview-body { padding: 16px 14px; }
+    .preview-body h1 { font-size: 22px; }
+    .preview-body h2 { font-size: 18px; }
+
+    /* Bigger touch targets */
+    .icon-btn { width: 36px; height: 36px; }
+    .icon-btn svg { width: 18px; height: 18px; }
+    .btn { padding: 8px 12px; }
+    .tree-row { padding: 8px; min-height: 36px; }
+    .toggle-row { padding: 5px 0; }
+    .switch { width: 38px; height: 22px; }
+    .switch .slider::before { width: 16px; height: 16px; top: 3px; left: 3px; }
+    .switch input:checked + .slider::before { transform: translateX(16px); }
+
+    /* Modal full-width friendly */
+    .modal { width: calc(100vw - 24px); max-width: 380px; }
+
+    /* Toast bottom stretch */
+    .toasts { left: 8px; right: 8px; bottom: 12px; align-items: stretch; }
+    .toast { min-width: 0; max-width: none; width: 100%; }
+  }
+
+  @media (max-width: 380px) {
+    .revert-btn { display: none; }
+  }
+</style>
 </head>
 <body>
-  <div id="app">
+<div id="app">
+  <!-- Topbar -->
+  <header class="topbar">
+    <button class="icon-btn mobile-hamburger" @click="drawerOpen=!drawerOpen" title="文件列表">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+      MkNexus
+    </div>
+    <div class="crumb">
+      <span v-if="currentPath">{{ currentPath }}<span class="dirty-dot" v-if="isDirty">●</span></span>
+      <span v-else style="color:var(--text-mute)">未打开文件</span>
+    </div>
+
+    <!-- Deploy pipeline indicator(顶部中间空白) -->
+    <transition name="pl-slide">
+      <div v-if="pipeline.active" class="pipeline" :class="pipeline.status">
+        <div v-for="(s,i) in pipeline.steps" :key="i" class="pl-step" :class="{done: s.state==='done', active: s.state==='active'}">
+          <span class="pl-ico">
+            <svg v-if="s.state==='done'" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span v-else-if="s.state==='active'" class="pl-spin"></span>
+            <span v-else class="pl-num">{{i+1}}</span>
+          </span>
+          <span class="pl-label">{{s.label}}</span>
+          <svg v-if="i < pipeline.steps.length-1" class="pl-arrow" :class="{lit: s.state==='done'}" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    </transition>
+
+    <div class="spacer"></div>
+
+    <!-- view switch -->
+    <div class="seg" v-show="currentPath">
+      <button :class="{active: view==='edit'}" @click="setView('edit')" title="仅编辑">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>编辑
+      </button>
+      <button class="seg-btn-split" :class="{active: view==='split'}" @click="setView('split')" title="分屏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>分屏
+      </button>
+      <button :class="{active: view==='preview'}" @click="setView('preview')" title="仅预览">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>预览
+      </button>
+    </div>
+
+    <button class="icon-btn save" :class="{dirty: isDirty}" :disabled="!currentPath" @click="save" title="保存 (Ctrl+S)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    </button>
+    <button class="icon-btn revert-btn" :disabled="!isDirty" @click="revert" title="撤销当前文件改动">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+    </button>
+
+    <button class="btn primary" :class="{loading: pipeline.active && pipeline.status==='running'}" :disabled="pendingCount===0 || (pipeline.active && pipeline.status==='running')" @click="deploy" title="部署到生产 (Ctrl+Shift+D)">
+      <span class="btn-spinner" v-if="pipeline.active && pipeline.status==='running'"></span>
+      <span v-else>部署</span> <span class="badge-count" v-if="pendingCount && !(pipeline.active && pipeline.status==='running')">{{ pendingCount }}</span>
+    </button>
+  </header>
+
+  <!-- Body -->
+  <div class="body" :class="{'drawer-open': drawerOpen}">
+    <div class="drawer-backdrop" @click="drawerOpen=false"></div>
     <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <h1>MkNexus</h1>
-        <div class="sidebar-actions">
-          <button class="btn-icon" @click="showApiModal" title="API接口">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-          </button>
-          <button class="btn-icon" @click="showNewFileModal" title="新建文件">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-          </button>
-          <button class="btn-icon" @click="showNewFolderModal" title="新建目录">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </button>
-          <button class="btn-icon" @click="loadFiles" title="刷新">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 4v6h-6M1 20v-6h6"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-          </button>
+    <aside class="sidebar" :style="{width: sideWidth+'px'}">
+      <div class="side-head">
+        <div class="side-actions">
+          <button class="icon-btn" @click="newFile" title="新建文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6M9 15h6"/></svg></button>
+          <button class="icon-btn" @click="newFolder" title="新建文件夹"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M12 10v6M9 13h6"/></svg></button>
+          <button class="icon-btn" @click="loadFiles" title="刷新"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
+          <span class="hint">{{ currentDir || '/' }}</span>
+        </div>
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="search" v-model="search" placeholder="搜索文件…" @keydown.esc="search=''" />
         </div>
       </div>
 
-      <div v-if="modified.length > 0" class="modified-indicator">
-        <span class="modified-count">{{ modified.length }}</span> 个文件待部署
-        <button class="btn-deploy" @click="showDeployModal">部署</button>
+      <div class="tree" ref="treeEl">
+        <div v-if="!filteredTree.length" class="tree-empty">无文件</div>
+        <template v-for="node in filteredTree" :key="node.path||node.name">
+          <!-- directory -->
+          <div v-if="node.dir"
+               class="tree-row is-dir"
+               :class="['indent-'+node.depth, {active: currentDir===node.path, 'drop-target': dragOver===node.path}]"
+               @click="toggleDir(node)"
+               @click.right.prevent="setCurrentDir(node.path)"
+               @dragover.prevent="dragOver=node.path"
+               @dragleave="dragOver=null"
+               @drop.prevent="onDrop(node)">
+            <svg class="chev" :class="{open: openDirs.has(node.path)}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg class="ficon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <span class="label">{{ node.name }}</span>
+          </div>
+          <!-- file -->
+          <div v-else
+               class="tree-row file"
+               :class="['indent-'+node.depth, {active: currentPath===node.path, deleted: node.change==='deleted'}]"
+               draggable="true"
+               @click="openFile(node.path)"
+               @dragstart="onDragStart(node.path)">
+            <span style="width:14px;flex:none"></span>
+            <svg class="ficon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="label">{{ node.name }}</span>
+            <span v-if="node.change" class="ch-dot" :class="node.change" :title="changeTitle(node.change)"></span>
+            <button class="row-del" @click.stop="del(node)" title="删除">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        </template>
       </div>
 
-      <div class="file-tree">
-        <div v-if="loading" class="loading"><div class="spinner"></div></div>
-        <div v-else-if="!files.length" class="empty-state">暂无文件</div>
-        <template v-else>
-          <tree-item
-            v-for="item in files"
-            :key="item.path"
-            :item="item"
-            :current-file="currentFile"
-            :modified="modified"
-            @open="openFile"
-            @delete="showDeleteModal"
-            @move="moveFile"
-            @revert="revertFileChange"
-            @set-dir="setCurrentDir">
-          </tree-item>
-        </template>
+      <div class="side-foot">
+        <div class="pending-bar" :class="{clickable: pendingCount}" @click="pendingCount && (pendingOpen=!pendingOpen)">
+          <span class="pending-summary">
+            待部署:<b>{{ pendingCount }}</b> 个改动
+          </span>
+          <svg v-if="pendingCount" class="pending-chev" :class="{open: pendingOpen}" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <span v-if="pendingCount" class="pending-deploy" @click.stop="deploy">部署 ↗</span>
+        </div>
+        <transition name="pend">
+          <div v-if="pendingOpen && pendingCount" class="pending-list">
+            <div v-for="([p, info]) in pendingEntries" :key="p" class="pending-item" :class="info" @click="openFromPending(p, info)">
+              <span class="ch-dot" :class="info"></span>
+              <span class="pending-path">{{ p }}</span>
+              <span class="pending-tag">{{ changeTag(info) }}</span>
+              <button class="pending-revert" @click.stop="revertFile(p)" title="撤销此改动">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+              </button>
+            </div>
+          </div>
+        </transition>
+        <div class="toggle-row">
+          <span>自动保存草稿</span>
+          <label class="switch"><input type="checkbox" v-model="autoSave" /><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <span>保存即部署</span>
+          <label class="switch"><input type="checkbox" v-model="autoDeploy" /><span class="slider"></span></label>
+        </div>
       </div>
     </aside>
 
-    <!-- Editor Area -->
-    <main class="editor-area">
-      <div class="editor-header">
-        <span class="file-status" :class="{ modified: isModified }">
-          {{ currentFile || '未选择文件' }}{{ isModified ? ' *' : '' }}
-        </span>
-        <div class="editor-actions">
-          <button class="btn" @click="togglePreview">
-            {{ isPreviewMode ? '编辑' : '预览' }}
-          </button>
-          <button class="btn" v-if="isModified" @click="revertFile" style="color: var(--text-muted);">恢复</button>
-          <button class="btn btn-primary" @click="saveFile" :disabled="!currentFile">保存</button>
-        </div>
-      </div>
+    <div class="divider" @mousedown="startDragSide" v-show="true"></div>
 
-      <div class="editor-container">
-        <div class="editor-pane" v-show="!isPreviewMode">
-          <textarea
-            id="editor"
-            v-model="content"
-            @input="onInput"
-            placeholder="选择一个文件开始编辑...">
-          </textarea>
-        </div>
-        <div class="preview-pane" v-show="isPreviewMode">
-          <div class="preview-content" v-html="renderedContent"></div>
-        </div>
-      </div>
-    </main>
-
-    <!-- Delete Confirm Dialog -->
-    <div v-if="dialogs.delete.show" class="dialog-overlay" @click.self="dialogs.delete.show = false">
-      <div class="dialog">
-        <h3>确认删除</h3>
-        <p class="dialog-message">
-          确定要删除 {{ dialogs.delete.isDirectory ? '目录' : '文件' }} <strong>{{ dialogs.delete.name }}</strong> 吗？
-          <span v-if="dialogs.delete.isDirectory">目录下的所有文件也会被删除。</span>
-          此操作不可撤销。
-        </p>
-        <div class="dialog-actions">
-          <button class="btn" @click="dialogs.delete.show = false">取消</button>
-          <button class="btn btn-primary" style="background: var(--danger)" @click="confirmDelete">删除</button>
+    <!-- Editor pane -->
+    <div class="pane pane-editor" v-show="view!=='preview'">
+      <div class="pane-head" v-if="currentPath"><span class="ttl">编辑器 · Markdown</span><span>{{ content.length }} 字符</span></div>
+      <div id="monaco" v-show="currentPath"></div>
+      <div class="welcome" v-if="!currentPath">
+        <div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <h2>{{ isMobile ? '点左上角 ≡ 选择文件' : '选择左侧文件开始编辑' }}</h2>
+          <p style="font-size:12px;margin-top:6px">{{ isMobile ? '右上演示 · 底部可切换视图' : 'Ctrl+S 保存 · Ctrl+Shift+D 部署' }}</p>
         </div>
       </div>
     </div>
 
-    <!-- Deploy Confirm Dialog -->
-    <div v-if="dialogs.deploy.show" class="dialog-overlay" @click.self="dialogs.deploy.show = false">
-      <div class="dialog">
-        <h3>确认部署</h3>
-        <p class="dialog-message">确定要部署 {{ modified.length }} 个文件吗？这将把修改同步到正式目录。</p>
-        <div class="dialog-actions">
-          <button class="btn" @click="dialogs.deploy.show = false">取消</button>
-          <button class="btn btn-primary" @click="confirmDeploy">部署</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- New File Dialog -->
-    <div v-if="dialogs.newFile.show" class="dialog-overlay" @click.self="dialogs.newFile.show = false">
-      <div class="dialog">
-        <h3>新建文件</h3>
-        <p style="margin-bottom: 12px; color: var(--text-muted); font-size: 12px;">
-          位置: {{ currentDir || '根目录' }}
-        </p>
-        <input
-          v-model="dialogs.newFile.name"
-          @keyup.enter="confirmNewFile"
-          placeholder="文件名.md"
-          ref="newFileInput"
-          autofocus>
-        <div class="dialog-actions">
-          <button class="btn" @click="dialogs.newFile.show = false">取消</button>
-          <button class="btn btn-primary" @click="confirmNewFile">创建</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- New Folder Dialog -->
-    <div v-if="dialogs.newFolder.show" class="dialog-overlay" @click.self="dialogs.newFolder.show = false">
-      <div class="dialog">
-        <h3>新建目录</h3>
-        <p style="margin-bottom: 12px; color: var(--text-muted); font-size: 12px;">
-          位置: {{ currentDir || '根目录' }}
-        </p>
-        <input
-          v-model="dialogs.newFolder.name"
-          @keyup.enter="confirmNewFolder"
-          placeholder="目录名"
-          ref="newFolderInput"
-          autofocus>
-        <div class="dialog-actions">
-          <button class="btn" @click="dialogs.newFolder.show = false">取消</button>
-          <button class="btn btn-primary" @click="confirmNewFolder">创建</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- API Info Dialog -->
-    <div v-if="dialogs.api.show" class="dialog-overlay" @click.self="dialogs.api.show = false">
-      <div class="dialog" style="max-width: 500px;">
-        <h3>API 接口</h3>
-        <div class="api-info">
-          <p style="margin-bottom: 8px; color: var(--text-secondary);">JSON 方式（path 含文件名）：</p>
-          <div class="api-row">
-            <pre class="api-code">{{ dialogs.api.jsonExample }}</pre>
-            <button class="api-copy-btn" @click="copyToApi(dialogs.api.jsonExample, $event)" :class="{ copied: dialogs.api.copied === 'json' }">
-              <svg v-if="dialogs.api.copied !== 'json'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 6L9 17l-5-5"/>
-              </svg>
-            </button>
-          </div>
-
-          <p style="margin: 16px 0 8px; color: var(--text-secondary);">文件方式（path 是目录名）：</p>
-          <div class="api-row">
-            <pre class="api-code">{{ dialogs.api.fileExample }}</pre>
-            <button class="api-copy-btn" @click="copyToApi(dialogs.api.fileExample, $event)" :class="{ copied: dialogs.api.copied === 'file' }">
-              <svg v-if="dialogs.api.copied !== 'file'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 6L9 17l-5-5"/>
-              </svg>
-            </button>
-          </div>
-
-          <p style="margin: 16px 0 4px; color: var(--text-muted); font-size: 11px;">
-            注：传 deploy=1 自动部署，不传则仅保存
-          </p>
-        </div>
-        <div class="dialog-actions">
-          <button class="btn" @click="dialogs.api.show = false">关闭</button>
-        </div>
+    <!-- Preview pane -->
+    <div class="pane pane-preview" v-show="view!=='edit' && currentPath"
+         :style="{flex: view==='preview' ? '1' : 'none', width: view==='split' ? previewWidth+'px' : (view==='preview' ? 'auto' : '0'), minWidth:0}">
+      <div class="divider" v-show="view==='split'" @mousedown="startDragPreview"></div>
+      <div class="pane-preview-inner">
+        <div class="pane-head"><span class="ttl">预览</span></div>
+        <div class="preview-body" v-html="rendered"></div>
       </div>
     </div>
   </div>
 
-  <script src="https://www.haoaiganfan.top/libs/vue@3.5.17.js"></script>
-  <script src="https://www.haoaiganfan.top/libs/marked.min.js"></script>
-  <script src="https://www.haoaiganfan.top/libs/highlight.min.js"></script>
-  <script src="https://www.haoaiganfan.top/libs/toastify.min.js"></script>
+  <!-- Toasts -->
+  <div class="toasts">
+    <div v-for="t in toasts" :key="t.id" class="toast" :class="t.type">{{ t.msg }}</div>
+  </div>
 
-  <script>
-    const { createApp, ref, computed, nextTick, onMounted, reactive, inject, provide } = Vue;
+  <!-- Modal: prompt -->
+  <div class="modal-mask" v-if="modal.show" @click.self="modal.show=false">
+    <div class="modal">
+      <h3>{{ modal.title }}</h3>
+      <input type="text" ref="modalInput" v-model="modal.value" @keydown.enter="modal.ok" @keydown.esc="modal.show=false" />
+      <div class="muted" v-if="modal.hint">{{ modal.hint }}</div>
+      <div class="acts">
+        <button class="btn ghost" @click="modal.show=false">取消</button>
+        <button class="btn primary" @click="modal.ok">确定</button>
+      </div>
+    </div>
+  </div>
 
-    // Tree Item Component
-    const TreeItem = {
-      name: 'TreeItem',
-      props: ['item', 'currentFile', 'modified'],
-      emits: ['open', 'delete', 'move', 'revert', 'set-dir'],
-      template: `
-        <div>
-          <div
-            class="tree-item"
-            :class="{
-              active: currentFile === item.path,
-              modified: modified.includes(item.path),
-              'tree-folder': item.isDirectory,
-              dragging: isDragging,
-              'drag-over': isDragOver,
-              'current-dir': isCurrentDir
-            }"
-            draggable="true"
-            @click="handleClick"
-            @dragstart="handleDragStart"
-            @dragend="handleDragEnd"
-            @dragover.prevent="handleDragOver"
-            @dragleave="handleDragLeave"
-            @drop="handleDrop">
-            <svg v-if="item.isDirectory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
-            </svg>
-            <span class="tree-name">{{ item.name }}</span>
-            <span v-if="modified.includes(item.path) && !item.isDirectory" class="modified-dot"></span>
-            <div class="tree-actions">
-              <button v-if="modified.includes(item.path) && !item.isDirectory" class="btn-revert" @click.stop="$emit('revert', item.path)" title="撤销修改">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 12h18M3 12l6-6M3 12l6 6"/>
-                </svg>
-              </button>
-              <button class="btn-delete" @click.stop="$emit('delete', item)">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div v-if="item.children" class="tree-children">
-            <tree-item
-              v-for="child in item.children"
-              :key="child.path"
-              :item="child"
-              :current-file="currentFile"
-              :modified="modified"
-              @open="$emit('open', $event)"
-              @delete="$emit('delete', $event)"
-              @move="$emit('move', $event)"
-              @revert="$emit('revert', $event)"
-              @set-dir="$emit('set-dir', $event)">
-            </tree-item>
-          </div>
-        </div>
-      `,
-      data() {
-        return {
-          isDragging: false,
-          isDragOver: false
-        };
-      },
-      inject: ['dragState', 'currentDir'],
-      computed: {
-        isCurrentDir() {
-          return this.item.isDirectory && this.currentDir === this.item.path;
-        }
-      },
-      methods: {
-        handleDragStart(e) {
-          console.log('dragStart', this.item.path);
-          if (this.item.isDirectory) return;
-          this.isDragging = true;
-          if (this.dragState) {
-            this.dragState.source = this.item.path;
-          }
-          e.dataTransfer.effectAllowed = 'move';
-        },
-        handleDragEnd() {
-          this.isDragging = false;
-          this.isDragOver = false;
-          this.dragState.source = null;
-          this.dragState.target = null;
-        },
-        handleDragOver(e) {
-          if (!this.item.isDirectory) return;
-          this.isDragOver = true;
-          this.dragState.target = this.item.path;
-          e.dataTransfer.dropEffect = 'move';
-        },
-        handleDragLeave() {
-          this.isDragOver = false;
-        },
-        handleDrop(e) {
-          e.preventDefault();
-          console.log('drop', this.item.path, 'source:', this.dragState?.source);
-          this.isDragOver = false;
-          if (!this.item.isDirectory || !this.dragState?.source) return;
-          this.$emit('move', { from: this.dragState.source, to: this.item.path });
-          this.dragState.source = null;
-          this.dragState.target = null;
-        },
-        handleClick() {
-          if (this.item.isDirectory) {
-            this.$emit('set-dir', this.item.path);
+  <!-- Modal: confirm -->
+  <div class="modal-mask" v-if="confirmModal.show" @click.self="confirmModal.show=false">
+    <div class="modal">
+      <h3>{{ confirmModal.title }}</h3>
+      <div class="muted" style="margin-top:-6px;font-size:13px;color:var(--text-dim)">{{ confirmModal.body }}</div>
+      <div class="acts">
+        <button class="btn ghost" @click="confirmModal.show=false">取消</button>
+        <button class="btn danger" @click="confirmModal.ok">删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 非 AMD 库先加载(Monaco loader 会注入全局 AMD define,必须放在其后) -->
+<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js"></script>
+
+<!-- Monaco loader(注入 AMD,放最后) -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+<script>
+window.monacoReady = new Promise((resolve) => {
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } });
+  require(['vs/editor/editor.main'], () => {
+    monaco.editor.defineTheme('mkx', {
+      base: 'vs-dark', inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#0d1117',
+        'editor.lineHighlightBackground': '#161b2288',
+        'editorGutter.background': '#0d1117',
+        'editorLineNumber.foreground': '#484f58',
+        'editorLineNumber.activeForeground': '#8b949e',
+        'editor.selectionBackground': '#264f78',
+        'editorCursor.foreground': '#58a6ff',
+      }
+    });
+    resolve();
+  });
+});
+</script>
+<script>
+const { createApp, ref, reactive, computed, onMounted, nextTick, watch } = Vue;
+
+createApp({
+  setup() {
+    // ---- state ----
+    const files = ref([]);        // flat array of paths from src/docs
+    const changesMap = ref({});   // path -> type
+    const currentPath = ref('');
+    const originalContent = ref('');
+    const content = ref('');
+    const view = ref(window.matchMedia('(max-width: 768px)').matches ? 'edit' : 'split');    // edit | split | preview
+    const isMobile = ref(window.matchMedia('(max-width: 768px)').matches);
+    const drawerOpen = ref(false);
+    const search = ref('');
+    const currentDir = ref('');
+    const openDirs = ref(new Set());
+    const sideWidth = ref(264);
+    const previewWidth = ref(460);
+    const autoSave = ref(true);
+    const autoDeploy = ref(false);
+    const pendingOpen = ref(false);
+    const dragPath = ref('');
+    const dragOver = ref(null);
+    const treeEl = ref(null);
+    const toasts = ref([]);
+    const modalInput = ref(null);
+    // ===== SSE deploy pipeline(顶部栏 4 阶段指示器) =====
+    // 阶段映射: synced→step0, building/built→step1, reloading→step2, done→step3
+    const STEP_KEYS = ['synced', 'build', 'reload', 'done'];
+    const pipeline = reactive({
+      active: false,
+      status: '',  // '' | running | done | failed
+      steps: [
+        { label: '草稿', state: 'idle' },
+        { label: '构建', state: 'idle' },
+        { label: '刷新', state: 'idle' },
+        { label: '完成', state: 'idle' },
+      ],
+    });
+    let pipeResetTimer = null;
+    function setStepState(idx, state) {
+      pipeline.steps[idx].state = state;
+    }
+    function resetPipelineAfter(ms) {
+      clearTimeout(pipeResetTimer);
+      pipeResetTimer = setTimeout(() => {
+        pipeline.active = false;
+        pipeline.status = '';
+        pipeline.steps.forEach(s => s.state = 'idle');
+      }, ms);
+    }
+    function handleSSE(ev) {
+      const d = JSON.parse(ev.data);
+      if (d.type !== 'stage') return;  // 忽略 log,只要阶段
+      pipeline.active = true;
+      // 把后续阶段先点亮为"已完成",当前阶段为 active
+      const map = {
+        synced:   { cur:0, status:'running' },
+        building: { cur:1, status:'running' },
+        built:    { cur:1, status:'running' },  // 构建完成的瞬间仍属"构建"步
+        reloading:{ cur:2, status:'running' },
+        done:     { cur:3, status:'done' },
+        failed:   { cur:-1, status:'failed' },
+      };
+      const m = map[d.stage]; if (!m) return;
+      pipeline.status = m.status;
+      // 重置所有步,然后点亮
+      pipeline.steps.forEach((s, i) => {
+        if (m.cur < 0) { s.state = pipeline.steps[Math.max(0, lastActiveStep())].state === 'done' ? 'done' : 'idle'; return; }
+        if (i < m.cur) s.state = 'done';
+        else if (i === m.cur) s.state = (m.status === 'done') ? 'done' : 'active';
+        else s.state = 'idle';
+      });
+      if (d.stage === 'done') { loadFiles(); resetPipelineAfter(2500); }
+      else if (d.stage === 'failed') { resetPipelineAfter(5000); }
+    }
+    function lastActiveStep() {
+      for (let i = pipeline.steps.length - 1; i >= 0; i--) if (pipeline.steps[i].state === 'done') return i;
+      return 0;
+    }
+    function connectSSE() {
+      const es = new EventSource('/api/events');
+      es.onmessage = (e) => { try { handleSSE(e); } catch(err){ console.warn('SSE parse err', err); } };
+      es.onerror = () => { es.close(); setTimeout(connectSSE, 3000); };
+    }
+    let toastSeq = 0;
+    let editor = null;
+    let models = {};              // path -> monaco model
+    let saveTimer = null;
+
+    const modal = reactive({ show:false, title:'', value:'', hint:'', ok:()=>{} });
+    const confirmModal = reactive({ show:false, title:'', body:'', ok:()=>{} });
+
+    // ---- toast ----
+    function toast(msg, type='info', ms=2200) {
+      const id = ++toastSeq;
+      toasts.value.push({ id, msg, type });
+      setTimeout(() => {
+        toasts.value = toasts.value.filter(t => t.id !== id);
+      }, ms);
+    }
+
+    // ---- API ----
+    async function api(method, url, body) {
+      const opt = { method, headers: {} };
+      if (body !== undefined) { opt.headers['Content-Type']='application/json'; opt.body = JSON.stringify(body); }
+      const r = await fetch(url, opt);
+      if (!r.ok) {
+        let m = r.statusText;
+        try { const j = await r.json(); m = j.error || j.message || m; } catch(e){}
+        throw new Error(m);
+      }
+      const txt = await r.text();
+      return txt ? JSON.parse(txt) : {};
+    }
+
+    // ---- tree building (消费后端返回的树结构) ----
+    const filteredTree = computed(() => {
+      const q = search.value.trim().toLowerCase();
+      const out = [];
+      (function walk(nodes, depth) {
+        if (!nodes) return;
+        // 目录优先 + 中文名排序
+        const arr = [...nodes].sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+          return a.name.localeCompare(b.name, 'zh');
+        });
+        for (const it of arr) {
+          if (it.isDirectory) {
+            // 搜索时:目录本身不匹配,但递归看子节点是否命中;命中则强行展开
+            const expanded = q || openDirs.value.has(it.path);
+            if (q) {
+              // 搜索模式下,先探测子树有无命中,无则跳过整个目录
+              let hit = false;
+              (function probe(n) { for (const c of (n.children||[])) { if (c.isDirectory) probe(c); else if (!q || c.name.toLowerCase().includes(q)) hit = true; } })(it);
+              if (!hit) continue;
+            }
+            out.push({ name: it.name, path: it.path, dir: true, depth });
+            if (expanded) walk(it.children, depth + 1);
           } else {
-            this.$emit('open', this.item.path);
+            if (q && !it.name.toLowerCase().includes(q)) continue;
+            out.push({ name: it.name.replace(/\.md$/,''), path: it.path, dir: false, depth, change: changesMap.value[it.path]||null });
           }
         }
+      })(files.value, 0);
+      return out;
+    });
+
+    const pendingCount = computed(() => Object.keys(changesMap.value).length);
+    const pendingEntries = computed(() => Object.entries(changesMap.value));  // [path, type][]
+    const isDirty = computed(() => content.value !== originalContent.value);
+    const rendered = computed(() => {
+      if (!content.value) return '';
+      const raw = marked.parse(content.value, { breaks: true, gfm: true });
+      const clean = DOMPurify.sanitize(raw);
+      return clean;
+    });
+
+    function changeTitle(t) {
+      return { modified:'已修改(草稿)', created:'新建(草稿)', deleted:'待删除', moved:'已移动' }[t] || '';
+    }
+    function changeTag(t) {
+      return { modified:'改', created:'新', deleted:'删', moved:'移' }[t] || t;
+    }
+    async function revertFile(p) {
+      try {
+        await api('delete', '/api/temp/' + encodeURIComponent(p));
+        await loadFiles();
+        if (currentPath.value === p) await openFile(p);
+        toast('已撤销该改动', 'info');
+      } catch (e) { toast('撤销失败: '+e.message, 'err'); }
+    }
+    async function openFromPending(p, info) {
+      pendingOpen.value = false;  // 收起列表
+      if (info === 'deleted') { toast('该文件已标记删除,无法打开', 'info'); return; }
+      await openFile(p);
+    }
+
+    // ---- file ops ----
+    async function loadFiles() {
+      try {
+        const d = await api('get', '/api/files');
+        files.value = d.files || [];
+        const map = {};
+        (d.changes || []).forEach(c => { map[c.path] = c.type; });
+        changesMap.value = map;
+        // 默认全部折叠
+      } catch (e) { toast('加载文件失败: '+e.message, 'err'); }
+    }
+
+    function toggleDir(node) {
+      setCurrentDir(node.path);
+      const s = new Set(openDirs.value);
+      s.has(node.path) ? s.delete(node.path) : s.add(node.path);
+      openDirs.value = s;
+    }
+    function setCurrentDir(p) { currentDir.value = p; }
+    function setView(v) {
+      if (isMobile.value && v === 'split') v = 'edit';   // 移动端不支持分屏
+      view.value = v;
+      nextTick(() => editor && editor.layout());
+    }
+
+    async function openFile(p) {
+      if (isDirty.value && autoSave.value) await save(true);
+      try {
+        const d = await api('get', '/api/file/' + encodeURIComponent(p));
+        currentPath.value = p;
+        originalContent.value = d.content || '';
+        content.value = d.content || '';
+        const dir = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+        currentDir.value = dir;
+        // 自动展开文件所在目录链
+        const parts = p.split('/');
+        const s = new Set(openDirs.value);
+        for (let i = 1; i < parts.length; i++) s.add(parts.slice(0, i).join('/'));
+        s.add(parts[0]);
+        openDirs.value = s;
+        await switchModel();
+        // 移动端: 切到编辑视图并关闭抽屉
+        if (isMobile.value) { view.value = 'edit'; drawerOpen.value = false; nextTick(() => editor && editor.layout()); }
+        else if (view.value === 'preview') view.value = 'split';
+      } catch (e) { toast('打开失败: '+e.message, 'err'); }
+    }
+
+    function ensureModel(p, initial) {
+      let m = models[p];
+      if (!m) {
+        m = monaco.editor.createModel(initial, 'markdown');
+        m.onDidChangeContent(() => {
+          content.value = m.getValue();
+          if (autoSave.value) scheduleSave();
+        });
+        models[p] = m;
       }
+      return m;
+    }
+
+    async function switchModel() {
+      await window.monacoReady;
+      if (!currentPath.value) return;
+      const m = ensureModel(currentPath.value, content.value);
+      // 缓存命中:同步 content(保证预览同步)
+      content.value = m.getValue();
+      if (editor) editor.setModel(m);
+    }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => save(true), 900);
+    }
+
+    async function save(silent=false) {
+      if (!currentPath.value || !isDirty.value) return;
+      try {
+        const r = await api('post', '/api/file/' + encodeURIComponent(currentPath.value), { content: content.value });
+        if (r.unchanged) { originalContent.value = content.value; return; }
+        originalContent.value = content.value;
+        await loadFiles();
+        if (!silent) toast('已保存到草稿', 'ok');
+        if (autoDeploy.value) { await deploy(true); }
+      } catch (e) { toast('保存失败: '+e.message, 'err'); }
+    }
+
+    async function deploy(silent=false) {
+      if (pendingCount.value === 0) { if(!silent) toast('没有待部署的改动', 'info'); return; }
+      try {
+        await api('post', '/api/deploy');
+        // 进度由 SSE 驱动,这里不再弹重复 toast
+      } catch (e) { toast('部署失败: '+e.message, 'err'); }
+    }
+
+    async function revert() {
+      if (!currentPath.value) return;
+      try {
+        await api('delete', '/api/temp/' + encodeURIComponent(currentPath.value));
+        await loadFiles();
+        await openFile(currentPath.value);
+        toast('已撤销草稿', 'info');
+      } catch (e) { toast('撤销失败: '+e.message, 'err'); }
+    }
+
+    function newFile() {
+      prompt('新文件名(不含.md 后缀):', '', async (name) => {
+        if (!name) return;
+        const base = currentDir.value;
+        const r = await api('post', '/api/new/' + encodeURIComponent(base), { name });
+        await loadFiles();
+        if (r.path) await openFile(r.path);
+        toast('已新建文件', 'ok');
+      });
+    }
+    function newFolder() {
+      prompt('新文件夹名:', '', async (name) => {
+        if (!name) return;
+        await api('post', '/api/folder/' + encodeURIComponent(currentDir.value), { name });
+        await loadFiles();
+        toast('已新建文件夹', 'ok');
+      });
+    }
+    function del(node) {
+      confirm('删除 ' + node.path + '?', '删除后会立即部署生效。', async () => {
+        await api('delete', '/api/file/' + encodeURIComponent(node.path));
+        if (currentPath.value === node.path) { currentPath.value=''; content.value=''; if(editor) editor.setModel(monaco.editor.createModel('','')); }
+        await loadFiles();
+        toast('已删除', 'ok');
+      });
+    }
+
+    function onDragStart(p) { dragPath.value = p; }
+    async function onDrop(node) {
+      dragOver.value = null;
+      const from = dragPath.value; if (!from || !node.dir) return;
+      if (from.startsWith(node.path + '/')) { toast('不能移动到自身子目录', 'err'); return; }
+      const name = from.split('/').pop();
+      const to = node.path ? node.path + '/' + name : name;
+      if (from === to) return;
+      try {
+        await api('post', '/api/move', { from, to });
+        await loadFiles();
+        toast('已移动 · 部署后生效', 'ok');
+      } catch (e) { toast('移动失败: '+e.message, 'err'); }
+    }
+
+    // ---- modal helpers ----
+    function prompt(title, def, ok) {
+      modal.title = title; modal.value = def; modal.hint = currentDir.value ? '位置: '+currentDir.value : '位置: 根目录';
+      modal.ok = () => { modal.show=false; ok(modal.value.trim()); };
+      modal.show = true;
+      nextTick(() => modalInput.value && modalInput.value.focus());
+    }
+    function confirm(title, body, ok) {
+      confirmModal.title = title; confirmModal.body = body;
+      confirmModal.ok = () => { confirmModal.show=false; ok(); };
+      confirmModal.show = true;
+    }
+
+    // ---- splitters ----
+    function startDragSide(e) { dragSplit(e, (dx) => { sideWidth.value = Math.min(480, Math.max(180, sideWidth.value + dx)); }); }
+    function startDragPreview(e) { dragSplit(e, (dx) => { previewWidth.value = Math.min(900, Math.max(280, previewWidth.value - dx)); }); }
+    function dragSplit(e, move) {
+      e.preventDefault();
+      const startX = e.clientX;
+      const el = e.currentTarget;
+      el.classList.add('dragging');
+      const onMove = (ev) => { move(ev.clientX - startX); startX = ev.clientX; };
+      const onUp = () => { el.classList.remove('dragging'); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); if(editor) editor.layout(); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
+    // ---- shortcuts ----
+    function onKey(e) {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 's') { e.preventDefault(); save(); }
+        else if (e.key === 'D' && e.shiftKey) { e.preventDefault(); deploy(); }
+        else if (e.key === 'b' && e.shiftKey) { e.preventDefault(); const o=['edit','split','preview']; view.value = o[(o.indexOf(view.value)+1)%3]; }
+      }
+    }
+
+    // ---- preview highlight ----
+    watch(rendered, () => {
+      nextTick(() => {
+        document.querySelectorAll('.preview-body pre code').forEach(b => { try { hljs && hljs.highlightElement(b); } catch(e){} });
+      });
+    });
+
+    onMounted(async () => {
+      await loadFiles();
+      await window.monacoReady;
+      editor = monaco.editor.create(document.getElementById('monaco'), {
+        language: 'markdown',
+        theme: 'mkx',
+        automaticLayout: true,
+        fontSize: 14,
+        lineHeight: 21,
+        minimap: { enabled: !isMobile.value, maxColumn: 80 },
+        wordWrap: 'on',
+        smoothScrolling: true,
+        cursorBlinking: 'smooth',
+        cursorSmoothCaretAnimation: 'on',
+        padding: { top: 16, bottom: 16 },
+        scrollBeyondLastLine: false,
+        renderWhitespace: 'selection',
+        bracketPairColorization: { enabled: true },
+        scrollbar: { verticalScrollbarSize: isMobile.value ? 10 : 14, horizontalScrollbarSize: isMobile.value ? 10 : 14 },
+      });
+      window.addEventListener('keydown', onKey);
+      window.addEventListener('resize', () => {
+        const m = window.matchMedia('(max-width: 768px)').matches;
+        isMobile.value = m;
+        if (!m && drawerOpen.value) drawerOpen.value = false;
+        if (editor) {
+          editor.updateOptions({ minimap: { enabled: !m, maxColumn: 80 } });
+          editor.layout();
+        }
+      });
+      watch(isMobile, (m) => { if (m && view.value === 'split') view.value = 'edit'; });
+      connectSSE();  // 启动 SSE 部署流水线订阅
+    });
+
+    return {
+      files, filteredTree, currentPath, currentDir, content, view, isMobile, drawerOpen, search, openDirs,
+      sideWidth, previewWidth, autoSave, autoDeploy, dragOver, treeEl, toasts, modal, confirmModal, modalInput,
+      pendingCount, isDirty, rendered,
+      pipeline,
+      pendingOpen, pendingEntries,
+      setView,
+      changeTitle, changeTag, revertFile, openFromPending,
+      loadFiles, toggleDir, setCurrentDir, openFile, save, deploy, revert, newFile, newFolder, del,
+      onDragStart, onDrop,
+      startDragSide, startDragPreview,
     };
-
-    createApp({
-      components: { TreeItem },
-      setup() {
-        // 拖拽状态
-        const dragState = reactive({ source: null, target: null });
-        provide('dragState', dragState);
-
-        // State
-        const files = ref([]);
-        const modified = ref([]);
-        const currentFile = ref(null);
-        const currentDir = ref('');
-        const content = ref('');
-        const originalContent = ref('');
-        const isPreviewMode = ref(false);
-        const loading = ref(true);
-
-        // 当前目录（用于创建位置）
-        provide('currentDir', computed(() => currentDir.value));
-
-        // Dialogs
-        const dialogs = ref({
-          delete: { show: false, path: '', name: '', isDirectory: false },
-          deploy: { show: false },
-          newFile: { show: false, name: '' },
-          newFolder: { show: false, name: '' },
-          api: {
-            show: false,
-            jsonExample: '',
-            fileExample: '',
-            copied: null
-          }
-        });
-
-        const newFileInput = ref(null);
-        const newFolderInput = ref(null);
-
-        // Computed
-        const isModified = computed(() => content.value !== originalContent.value);
-        const renderedContent = computed(() => {
-          if (typeof marked !== 'undefined') {
-            return marked.parse(content.value || '');
-          }
-          return content.value || '';
-        });
-
-        // API
-        const API = window.location.pathname.startsWith('/editor') ? '/editor' : '';
-
-        const apiFetch = async (url, options = {}) => {
-          try {
-            const res = await fetch(`${API}${url}`, options);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return await res.json();
-          } catch (error) {
-            showToast(error.message, 'error');
-            throw error;
-          }
-        };
-
-        const showToast = (message, type = 'info') => {
-          // 移除旧通知
-          const oldNotification = document.querySelector('.notification');
-          if (oldNotification) {
-            oldNotification.remove();
-          }
-
-          // 创建新通知
-          const notification = document.createElement('div');
-          notification.className = `notification ${type}`;
-          notification.textContent = message;
-          document.body.appendChild(notification);
-
-          // 自动移除
-          setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transform = 'translateX(-50%) translateY(-10px)';
-            setTimeout(() => notification.remove(), 200);
-          }, 2500);
-        };
-
-        // Methods
-        const loadFiles = async () => {
-          loading.value = true;
-          try {
-            const data = await apiFetch('/api/files');
-            files.value = data.files || [];
-            modified.value = data.modified || [];
-          } catch (error) {
-            files.value = [];
-          } finally {
-            loading.value = false;
-          }
-        };
-
-        const openFile = async (path) => {
-          try {
-            const data = await apiFetch(`/api/file/${encodeURIComponent(path)}`);
-            currentFile.value = path;
-            currentDir.value = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '';
-            content.value = data.content || '';
-            originalContent.value = data.content || '';
-            isPreviewMode.value = false;
-          } catch (error) {
-            showToast('打开文件失败', 'error');
-          }
-        };
-
-        const saveFile = async () => {
-          if (!currentFile.value) return;
-
-          try {
-            await apiFetch(`/api/file/${encodeURIComponent(currentFile.value)}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content: content.value })
-            });
-
-            originalContent.value = content.value;
-            await loadFiles();
-            showToast('已保存', 'success');
-          } catch (error) {
-            showToast('保存失败', 'error');
-          }
-        };
-
-        const revertFile = () => {
-          content.value = originalContent.value;
-          showToast('已恢复到原始内容', 'info');
-        };
-
-        const showDeleteModal = (item) => {
-          dialogs.value.delete.show = true;
-          dialogs.value.delete.path = item.path;
-          dialogs.value.delete.name = item.name;
-          dialogs.value.delete.isDirectory = item.isDirectory;
-        };
-
-        const confirmDelete = async () => {
-          const path = dialogs.value.delete.path;
-          dialogs.value.delete.show = false;
-
-          try {
-            await apiFetch(`/api/file/${encodeURIComponent(path)}`, { method: 'DELETE' });
-
-            if (currentFile.value === path) {
-              currentFile.value = null;
-              content.value = '';
-              originalContent.value = '';
-            }
-            await loadFiles();
-            showToast('已删除', 'success');
-          } catch (error) {
-            showToast('删除失败', 'error');
-          }
-        };
-
-        const showDeployModal = () => {
-          if (modified.value.length === 0) return;
-          dialogs.value.deploy.show = true;
-        };
-
-        const confirmDeploy = async () => {
-          dialogs.value.deploy.show = false;
-
-          try {
-            const data = await apiFetch('/api/deploy', { method: 'POST' });
-            await loadFiles();
-            showToast(data.message || '部署成功', 'success');
-          } catch (error) {
-            showToast('部署失败', 'error');
-          }
-        };
-
-        const showNewFileModal = () => {
-          dialogs.value.newFile.name = '';
-          dialogs.value.newFile.show = true;
-          nextTick(() => {
-            if (newFileInput.value) newFileInput.value.focus();
-          });
-        };
-
-        const confirmNewFile = async () => {
-          const name = dialogs.value.newFile.name.trim();
-          if (!name) return;
-
-          if (!name.endsWith('.md')) {
-            showToast('文件名必须以 .md 结尾', 'error');
-            return;
-          }
-
-          try {
-            const data = await apiFetch(`/api/new/${encodeURIComponent(currentDir.value)}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name })
-            });
-
-            dialogs.value.newFile.show = false;
-            await loadFiles();
-            openFile(data.path);
-          } catch (error) {
-            showToast('创建失败', 'error');
-          }
-        };
-
-        const showNewFolderModal = () => {
-          dialogs.value.newFolder.name = '';
-          dialogs.value.newFolder.show = true;
-          nextTick(() => {
-            if (newFolderInput.value) newFolderInput.value.focus();
-          });
-        };
-
-        const confirmNewFolder = async () => {
-          const name = dialogs.value.newFolder.name.trim();
-          if (!name) return;
-
-          try {
-            await apiFetch(`/api/folder/${encodeURIComponent(currentDir.value)}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name })
-            });
-
-            dialogs.value.newFolder.show = false;
-            await loadFiles();
-            showToast('目录已创建', 'success');
-          } catch (error) {
-            showToast('创建失败', 'error');
-          }
-        };
-
-        const showApiModal = () => {
-          const baseUrl = window.location.origin + API;
-          const jsonUrl = baseUrl + '/api/upload';
-          const fileUrl = baseUrl + '/api/upload/file';
-          dialogs.value.api.jsonExample = `curl -X POST ${jsonUrl} \\
-  -H "Content-Type: application/json" \\
-  -d '{"path":"docs/test.md","content":"# Hello World","deploy":1}'`;
-          dialogs.value.api.fileExample = `curl -X POST ${fileUrl} \\
-  -F "file=@./test.md" \\
-  -F "path=docs" \\
-  -F "deploy=1"`;
-          dialogs.value.api.show = true;
-          dialogs.value.api.copied = null;
-        };
-
-        const copyToApi = async (text, event) => {
-          event.stopPropagation();
-          try {
-            await navigator.clipboard.writeText(text);
-            const type = text.includes('application/json') ? 'json' : 'file';
-            dialogs.value.api.copied = type;
-            showToast('已复制到剪贴板', 'info');
-            setTimeout(() => {
-              dialogs.value.api.copied = null;
-            }, 2000);
-          } catch (err) {
-            // 降级方案
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-              document.execCommand('copy');
-              const type = text.includes('application/json') ? 'json' : 'file';
-              dialogs.value.api.copied = type;
-              showToast('已复制到剪贴板', 'info');
-              setTimeout(() => {
-                dialogs.value.api.copied = null;
-              }, 2000);
-            } catch (e) {
-              showToast('复制失败', 'error');
-            }
-            document.body.removeChild(textarea);
-          }
-        };
-
-        const moveFile = async ({ from, to }) => {
-          try {
-            const data = await apiFetch('/api/move', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ from, to })
-            });
-
-            // 立即更新本地文件树显示
-            const fileName = from.includes('/') ? from.substring(from.lastIndexOf('/') + 1) : from;
-            const newPath = data.newPath || `${to}/${fileName}`;
-
-            // 从 files 中移除旧位置的文件
-            const removeFromTree = (items, path) => {
-              for (let i = 0; i < items.length; i++) {
-                if (items[i].path === path && !items[i].isDirectory) {
-                  items.splice(i, 1);
-                  return true;
-                }
-                if (items[i].children && removeFromTree(items[i].children, path)) {
-                  return true;
-                }
-              }
-              return false;
-            };
-
-            // 在新位置添加文件
-            const addToTree = (items, path, name) => {
-              const pathParts = path.split('/');
-              const dirName = pathParts[0];
-              const remainingPath = pathParts.slice(1).join('/');
-
-              for (const item of items) {
-                if (item.isDirectory && item.path === dirName) {
-                  if (remainingPath) {
-                    if (!item.children) item.children = [];
-                    return addToTree(item.children, remainingPath, name);
-                  } else {
-                    item.children.push({ name, path, isDirectory: false });
-                    return true;
-                  }
-                }
-              }
-              return false;
-            };
-
-            // 更新文件树
-            const newFiles = [...files.value];
-            removeFromTree(newFiles, from);
-            addToTree(newFiles, to, fileName);
-            files.value = newFiles;
-
-            // 添加到 modified 列表
-            if (!modified.value.includes(newPath)) {
-              modified.value.push(newPath);
-            }
-
-            // 如果当前打开的是被移动的文件，关闭它
-            if (currentFile.value === from) {
-              currentFile.value = null;
-              content.value = '';
-              originalContent.value = '';
-            }
-
-            showToast('文件已移动，请部署后生效', 'success');
-          } catch (error) {
-            showToast('移动失败', 'error');
-          }
-        };
-
-        const revertFileChange = async (filePath) => {
-          try {
-            await apiFetch(`/api/temp/${encodeURIComponent(filePath)}`, { method: 'DELETE' });
-
-            // 从 modified 列表移除
-            modified.value = modified.value.filter(p => p !== filePath);
-
-            // 如果当前打开的是被撤销的文件，重新加载
-            if (currentFile.value === filePath) {
-              const data = await apiFetch(`/api/file/${encodeURIComponent(filePath)}`);
-              content.value = data.content || '';
-              originalContent.value = data.content || '';
-            }
-
-            showToast('修改已取消', 'info');
-          } catch (error) {
-            showToast('取消失败', 'error');
-          }
-        };
-
-        const setCurrentDir = (dir) => {
-          currentDir.value = dir;
-        };
-
-        const togglePreview = () => {
-          isPreviewMode.value = !isPreviewMode.value;
-        };
-
-        const onInput = () => {
-          // Preview updates via computed
-        };
-
-        // Keyboard shortcuts
-        onMounted(() => {
-          document.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-              e.preventDefault();
-              saveFile();
-            }
-            if (e.key === 'Escape') {
-              Object.values(dialogs.value).forEach(d => d.show = false);
-            }
-          });
-        });
-
-        // Init
-        loadFiles();
-
-        return {
-          files,
-          modified,
-          currentFile,
-          content,
-          isPreviewMode,
-          isModified,
-          renderedContent,
-          loading,
-          dialogs,
-          newFileInput,
-          newFolderInput,
-          loadFiles,
-          openFile,
-          saveFile,
-          revertFile,
-          showDeleteModal,
-          confirmDelete,
-          showDeployModal,
-          confirmDeploy,
-          showNewFileModal,
-          confirmNewFile,
-          showNewFolderModal,
-          confirmNewFolder,
-          showApiModal,
-          copyToApi,
-          moveFile,
-          revertFileChange,
-          setCurrentDir,
-          togglePreview,
-          onInput
-        };
-      }
-    }).mount('#app');
-  </script>
+  }
+}).mount('#app');
+</script>
 </body>
 </html>
