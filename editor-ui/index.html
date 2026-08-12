@@ -287,6 +287,26 @@
   .toast.info { border-left-color: var(--accent); }
   @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
 
+  /* ===== API Modal ===== */
+  .api-section { margin-bottom: 16px; }
+  .api-section:last-of-type { margin-bottom: 8px; }
+  .api-label {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 11.5px; color: var(--text-dim); margin-bottom: 6px;
+  }
+  .api-copy {
+    display: inline-flex; align-items: center; gap: 4px; flex: none;
+    font-size: 11px; color: var(--text-mute); padding: 3px 8px; border-radius: 5px;
+    border: 1px solid var(--border-2); background: var(--panel); transition: all .12s;
+  }
+  .api-copy:hover { color: var(--accent); border-color: var(--accent); }
+  .api-copy.copied { color: var(--accent-2); border-color: var(--accent-2); }
+  .api-code {
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-family: var(--mono); font-size: 11.5px;
+    color: var(--text-dim); white-space: pre-wrap; word-break: break-all; line-height: 1.6;
+  }
+
   /* ===== Modal ===== */
   .modal-mask {
     position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200;
@@ -429,6 +449,9 @@
     </button>
     <button class="icon-btn revert-btn" :disabled="!isDirty" @click="revert" title="撤销当前文件改动">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+    </button>
+    <button class="icon-btn" @click="showApiModal" title="外部上传 API 接口">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/><path d="M12 5h8"/></svg>
     </button>
 
     <button class="btn primary" :class="{loading: pipeline.active && pipeline.status==='running'}" :disabled="pendingCount===0 || (pipeline.active && pipeline.status==='running')" @click="deploy" title="部署到生产 (Ctrl+Shift+D)">
@@ -575,6 +598,37 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal: API 接口 -->
+  <div class="modal-mask" v-if="apiModal.show" @click.self="apiModal.show=false">
+    <div class="modal" style="max-width:520px">
+      <h3>外部上传 API 接口</h3>
+      <div class="api-section">
+        <div class="api-label">
+          <span>JSON 方式(path 含文件名,deploy=1 自动部署)</span>
+          <button class="api-copy" @click="copyText(apiModal.jsonExample, $event)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span class="copy-txt">复制</span>
+          </button>
+        </div>
+        <pre class="api-code">{{ apiModal.jsonExample }}</pre>
+      </div>
+      <div class="api-section">
+        <div class="api-label">
+          <span>文件方式(path 是目录名,multipart)</span>
+          <button class="api-copy" @click="copyText(apiModal.fileExample, $event)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span class="copy-txt">复制</span>
+          </button>
+        </div>
+        <pre class="api-code">{{ apiModal.fileExample }}</pre>
+      </div>
+      <div class="muted" style="margin-top:4px;font-size:11px">上传后可通过 deploy=1 参数自动部署,或调用后手动部署</div>
+      <div class="acts">
+        <button class="btn ghost" @click="apiModal.show=false">关闭</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- 非 AMD 库先加载(Monaco loader 会注入全局 AMD define,必须放在其后) -->
@@ -698,6 +752,7 @@ createApp({
 
     const modal = reactive({ show:false, title:'', value:'', hint:'', ok:()=>{} });
     const confirmModal = reactive({ show:false, title:'', body:'', ok:()=>{} });
+    const apiModal = reactive({ show:false, jsonExample:'', fileExample:'' });
 
     // ---- toast ----
     function toast(msg, type='info', ms=2200) {
@@ -943,6 +998,36 @@ createApp({
       confirmModal.show = true;
     }
 
+    // ---- API 接口对话框 ----
+    function showApiModal() {
+      const base = window.location.origin;
+      apiModal.jsonExample =
+        `curl -X POST ${base}/api/upload \\
+  -H "Content-Type: application/json" \\
+  -d '{"path":"docs/test.md","content":"# Hello World","deploy":1}'`;
+      apiModal.fileExample =
+        `curl -X POST ${base}/api/upload/file \\
+  -F "file=@./test.md" \\
+  -F "path=docs"`;
+      apiModal.show = true;
+    }
+    async function copyText(text, ev) {
+      const btn = ev?.currentTarget;  // 必须在 await 之前取(currentTarget 在事件结束后变 null)
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // fallback for non-secure contexts (HTTP)
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      if (!btn) return;
+      const txt = btn.querySelector('.copy-txt'); const orig = txt?.textContent;
+      btn.classList.add('copied'); if (txt) txt.textContent = '已复制';
+      setTimeout(() => { btn.classList.remove('copied'); if (txt) txt.textContent = orig; }, 1500);
+    }
+
     // ---- splitters ----
     function startDragSide(e) { dragSplit(e, (dx) => { sideWidth.value = Math.min(480, Math.max(180, sideWidth.value + dx)); }); }
     function startDragPreview(e) { dragSplit(e, (dx) => { previewWidth.value = Math.min(900, Math.max(280, previewWidth.value - dx)); }); }
@@ -1009,11 +1094,11 @@ createApp({
 
     return {
       files, filteredTree, currentPath, currentDir, content, view, isMobile, drawerOpen, search, openDirs,
-      sideWidth, previewWidth, autoSave, autoDeploy, dragOver, treeEl, toasts, modal, confirmModal, modalInput,
+      sideWidth, previewWidth, autoSave, autoDeploy, dragOver, treeEl, toasts, modal, confirmModal, modalInput, apiModal,
       pendingCount, isDirty, rendered,
       pipeline,
       pendingOpen, pendingEntries,
-      setView,
+      setView, showApiModal, copyText,
       changeTitle, changeTag, revertFile, openFromPending,
       loadFiles, toggleDir, setCurrentDir, openFile, save, deploy, revert, newFile, newFolder, del,
       onDragStart, onDrop,
