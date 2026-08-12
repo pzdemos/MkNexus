@@ -11,6 +11,17 @@ const { execSync } = require('child_process');
 const multer = require('multer');
 
 const app = express();
+
+// ==================== SSE 部署流水线事件(函数定义,路由在 json 中间件后注册) ====================
+const sseClients = new Set();
+
+function emitEvent(type, data) {
+  const payload = `data: ${JSON.stringify({ type, ...data, ts: Date.now() })}\n\n`;
+  for (const c of sseClients) {
+    try { c.write(payload); } catch (e) {}
+  }
+}
+
 const PORT = 3535;
 
 // 目录配置
@@ -31,7 +42,33 @@ const upload = multer({
 });
 
 app.use(express.json({ limit: '50mb' }));
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html') || req.path.endsWith('.js') || req.path.endsWith('.css')) {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, '../editor-ui')));
+
+// ==================== SSE 路由(必须在 express.json 之后) ====================
+app.get('/api/events', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+  sseClients.add(res);
+  const hb = setInterval(() => { try { res.write(': hb\n\n'); } catch(e){} }, 25000);
+  req.on('close', () => { clearInterval(hb); sseClients.delete(res); });
+});
+
+// watch-and-deploy 推送部署流水线事件(本机内部调用)
+app.post('/internal/deploy-event', (req, res) => {
+  emitEvent(req.body.type || 'log', req.body);
+  res.json({ ok: true });
+});
 
 // ==================== 工具函数 ====================
 
@@ -560,6 +597,7 @@ app.post('/api/move', (req, res) => {
 app.post('/api/deploy', (req, res) => {
   try {
     const deployed = deployFiles();
+    emitEvent('stage', { stage: 'synced', msg: `草稿已合并到 src/docs(${deployed.length} 项),等待构建…`, count: deployed.length });
     res.json({
       success: true,
       message: `已部署 ${deployed.length} 个文件`,
