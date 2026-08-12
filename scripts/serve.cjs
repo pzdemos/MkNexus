@@ -140,6 +140,10 @@ const server = http.createServer((req, res) => {
   serveHandler(req, res, {
     public: DIST_DIR,
     cleanUrls: true,
+    rewrites: [
+      { source: '/assets/:path*', destination: '/assets/:path' },  // 静态资源不 fallback
+      { source: '/:path*', destination: '/index.html' },           // 其余路由 SPA fallback
+    ],
   });
 });
 
