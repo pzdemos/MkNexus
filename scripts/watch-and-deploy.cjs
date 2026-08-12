@@ -1,23 +1,23 @@
 #!/usr/bin/env node
 /**
- * 本地监听 → 自动打包 → 自动部署到远程服务器
+ * 本地监听 → 自动打包 → 通知本机 docs serve 刷新
  */
 
-const { execSync } = require('child_process');
+const { spawn } = require('child_process');
 const chokidar = require('chokidar');
 const path = require('path');
+const http = require('http');
 
 // ==================== 配置 ====================
 const CONFIG = {
   // 监听的目录
   watchDir: path.resolve(__dirname, '../src'),
   // 忽略的文件/目录
-  ignored: /(^|[\/\\])\../,  // dotfiles
-  // 远程服务器配置
-  remote: {
-    host: 'root@121.43.33.235',
-    path: '/var/server/MkNexus/dist',
-    port: 8080,  // WebSocket 通知端口
+  ignored: /(^|[\/\\])\./,  // dotfiles
+  // 本机 docs serve(静态 + WebSocket 热刷新)
+  local: {
+    host: '127.0.0.1',
+    port: 8081,
   },
   // 部署延迟（毫秒）- 避免频繁构建
   debounceDelay: 500,
@@ -45,92 +45,88 @@ const log = {
 let buildTimer = null;
 let isBuilding = false;
 
-// ==================== 构建函数 ====================
+// ==================== 向 editor-server 推送事件 ====================
+function emit(type, data) {
+  const payload = JSON.stringify({ type, ...data });
+  const req = http.request({
+    hostname: '127.0.0.1', port: 3535, path: '/internal/deploy-event', method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+  });
+  req.on('error', () => {});  // editor 没起也不报错
+  req.write(payload); req.end();
+}
+
+// ==================== 构建函数(spawn 实时输出) ====================
 function build() {
-  if (isBuilding) {
-    log.warn('正在构建中，跳过本次触发...');
-    return;
-  }
-
+  if (isBuilding) { log.warn('正在构建中，跳过…'); return; }
   isBuilding = true;
+  const t0 = Date.now();
   log.info(`${colors.bold}开始构建...${colors.reset}`);
+  emit('stage', { stage: 'building', msg: '正在构建…' });
 
-  try {
-    // 执行构建
-    execSync('npm run build', {
-      stdio: 'inherit',
-      cwd: path.resolve(__dirname, '..'),
+  const p = spawn('npm', ['run', 'build'], {
+    cwd: path.resolve(__dirname, '..'),
+    env: { ...process.env, FORCE_COLOR: '0' },
+  });
+
+  p.stdout.on('data', (d) => {
+    const lines = d.toString().split('\n').filter(l => l.trim());
+    lines.forEach(line => {
+      const clean = line.replace(/\x1b\[[0-9;]*m/g, '').trim();
+      if (clean) emit('log', { msg: clean, level: 'info' });
     });
+  });
+  p.stderr.on('data', (d) => {
+    const line = d.toString().replace(/\x1b\[[0-9;]*m/g, '').trim();
+    if (line) emit('log', { msg: line, level: 'warn' });
+  });
 
-    log.success(`${colors.green}${colors.bold}构建完成${colors.reset}`);
-    deploy();
-  } catch (error) {
-    log.error('构建失败:', error.message);
-    isBuilding = false;
-  }
+  p.on('close', (code) => {
+    const dur = ((Date.now() - t0) / 1000).toFixed(1);
+    if (code === 0) {
+      log.success(`${colors.green}${colors.bold}构建完成 (${dur}s)${colors.reset}`);
+      emit('stage', { stage: 'built', msg: `构建完成 (${dur}s)`, duration: dur });
+      deploy();
+    } else {
+      log.error('构建失败,exit', code);
+      emit('stage', { stage: 'failed', msg: `构建失败 (exit ${code})`, duration: dur });
+      isBuilding = false;
+    }
+  });
 }
 
 // ==================== 部署函数 ====================
 function deploy() {
-  log.info('正在部署到远程服务器...');
-
-  const { host, path: remotePath } = CONFIG.remote;
-
+  log.info('dist 已更新(本机),通知 docs serve 刷新…');
+  emit('stage', { stage: 'reloading', msg: '通知文档站刷新…' });
   try {
-    // rsync 同步 dist 目录到远程
-    // -a: 归档模式，保留权限
-    // -v: 详细输出
-    // -z: 压缩传输
-    // --delete: 删除远程不存在的文件
-    execSync(
-      `rsync -avz --delete dist/ ${host}:${remotePath}/`,
-      {
-        stdio: 'inherit',
-        cwd: path.resolve(__dirname, '..'),
-      }
-    );
-
-    log.success(`${colors.green}${colors.bold}部署完成！${colors.reset}`);
-
-    // 通知远程服务器刷新（可选）
-    notifyRemoteReload();
+    notifyLocalReload();
   } catch (error) {
-    log.error('部署失败:', error.message);
+    log.error('通知失败:', error.message);
+    emit('stage', { stage: 'failed', msg: '通知失败: ' + error.message });
   } finally {
     isBuilding = false;
   }
 }
 
-// ==================== 通知远程刷新 ====================
-function notifyRemoteReload() {
-  const http = require('http');
-  const { port } = CONFIG.remote;
-
+// ==================== 通知本机 serve 刷新 ====================
+function notifyLocalReload() {
+  const { host, port } = CONFIG.local;
   const data = JSON.stringify({ type: 'reload' });
 
-  const options = {
-    hostname: '121.43.33.235',
-    port: port,
-    path: '/__notify',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': data.length,
-    },
-  };
-
-  const req = http.request(options, (res) => {
+  const req = http.request({
+    hostname: host, port, path: '/__notify', method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': data.length },
+  }, (res) => {
     if (res.statusCode === 200) {
-      log.info('已通知远程服务器刷新');
+      log.info('已通知 docs serve 刷新');
+      emit('stage', { stage: 'done', msg: '部署完成 · 文档站已刷新' });
+    } else {
+      emit('stage', { stage: 'failed', msg: 'serve 返回 ' + res.statusCode });
     }
   });
-
-  req.on('error', (err) => {
-    // 静默处理，不影响部署流程
-  });
-
-  req.write(data);
-  req.end();
+  req.on('error', (err) => { emit('stage', { stage: 'failed', msg: '通知失败: ' + err.message }); });
+  req.write(data); req.end();
 }
 
 // ==================== 文件变化处理 ====================
@@ -152,8 +148,7 @@ function start() {
   console.log(`${colors.cyan}${colors.bold}\n🚀 MkNexus 本地监听部署${colors.reset}`);
   console.log(`${colors.gray}─${'─'.repeat(39)}${colors.reset}`);
   log.info(`监听目录: ${CONFIG.watchDir}`);
-  log.info(`远程服务器: ${CONFIG.remote.host}`);
-  log.info(`远程路径: ${CONFIG.remote.path}`);
+  log.info(`docs serve: ${CONFIG.local.host}:${CONFIG.local.port}`);
   console.log(`${colors.gray}─${'─'.repeat(39)}${colors.reset}`);
 
   // 初始构建一次
