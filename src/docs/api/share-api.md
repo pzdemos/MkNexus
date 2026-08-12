@@ -1,4 +1,4 @@
-# Share API — 外部调用文档
+# Share API — 外部调用文档 谢谢
 
 Base URL: `https://www.haoaiganfan.top/design/oss`
 
