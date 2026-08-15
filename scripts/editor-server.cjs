@@ -9,8 +9,50 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const multer = require('multer');
+const apacheMd5 = require('apache-md5');
 
 const app = express();
+
+// ==================== Basic Auth(替代 nginx auth_basic) ====================
+const HTPASSWD_FILE = '/etc/nginx/.htpasswd.mknexus';
+
+function checkBasicAuth(req, res, next) {
+  if (req.path === '/internal/deploy-event') return next();
+
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Basic ')) {
+    return res.status(401).set('WWW-Authenticate', 'Basic realm="MkNexus Editor"').json({ error: '需要认证' });
+  }
+
+  const decoded = Buffer.from(auth.slice(6), 'base64').toString('utf-8');
+  const sep = decoded.indexOf(':');
+  if (sep === -1) {
+    return res.status(401).set('WWW-Authenticate', 'Basic realm="MkNexus Editor"').json({ error: '认证失败' });
+  }
+
+  const username = decoded.slice(0, sep);
+  const password = decoded.slice(sep + 1);
+
+  let allowed = false;
+  try {
+    const lines = fs.readFileSync(HTPASSWD_FILE, 'utf-8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const [user, hash] = trimmed.split(':');
+      if (user === username && apacheMd5(password, hash) === hash) {
+        allowed = true;
+        break;
+      }
+    }
+  } catch (e) {}
+
+  if (!allowed) {
+    return res.status(401).set('WWW-Authenticate', 'Basic realm="MkNexus Editor"').json({ error: '认证失败' });
+  }
+
+  next();
+}
 
 // ==================== SSE 部署流水线事件(函数定义,路由在 json 中间件后注册) ====================
 const sseClients = new Set();
@@ -48,6 +90,10 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// 全局 Basic Auth(登录 UI 前就要认证,同 nginx auth_basic 行为)
+app.use(checkBasicAuth);
+
 app.use(express.static(path.join(__dirname, '../editor-ui')));
 
 // ==================== SSE 路由(必须在 express.json 之后) ====================
