@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>MkNexus Editor</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css" />
+<link rel="stylesheet" href="https://libs.haoaiganfan.top/github-dark.min.css" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -639,15 +639,15 @@
 </div>
 
 <!-- 非 AMD 库先加载(Monaco loader 会注入全局 AMD define,必须放在其后) -->
-<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js"></script>
+<script src="https://libs.haoaiganfan.top/vue@3.5.13/dist/vue.global.prod.js"></script>
+<script src="https://libs.haoaiganfan.top/marked@12.0.2/marked.min.js"></script>
+<script src="https://libs.haoaiganfan.top/dompurify@3.2.3/dist/purify.min.js"></script>
 
 <!-- Monaco loader(注入 AMD,放最后) -->
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+<script src="https://libs.haoaiganfan.top/monaco-editor@0.52.2/min/vs/loader.js"></script>
 <script>
 window.monacoReady = new Promise((resolve) => {
-  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } });
+  require.config({ paths: { vs: 'https://libs.haoaiganfan.top/monaco-editor@0.52.2/min/vs' } });
   require(['vs/editor/editor.main'], () => {
     monaco.editor.defineTheme('mkx', {
       base: 'vs-dark', inherit: true,
