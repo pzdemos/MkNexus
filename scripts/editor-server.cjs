@@ -70,6 +70,18 @@ const PORT = 3535;
 const DOCS_DIR = path.resolve(__dirname, '../src/docs');
 const TEMP_DIR = path.resolve(__dirname, '../.editor-temp');
 
+function safeJoin(root, ...parts) {
+  if (parts.some(part => typeof part !== 'string' || part.includes('\0'))) throw new Error('非法路径');
+  const target = path.resolve(root, ...parts);
+  if (target !== root && !target.startsWith(root + path.sep)) throw new Error('路径超出允许目录');
+  let current = root;
+  for (const segment of path.relative(root, target).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    if (fs.existsSync(current) && fs.lstatSync(current).isSymbolicLink()) throw new Error('不允许符号链接');
+  }
+  return target;
+}
+
 // 确保 temp 目录存在
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -127,7 +139,8 @@ function getFiles(dir, basePath = '') {
 
   for (const item of items) {
     const fullPath = path.join(dir, item);
-    const stat = fs.statSync(fullPath);
+    const stat = fs.lstatSync(fullPath);
+    if (stat.isSymbolicLink()) continue;
     const relativePath = path.join(basePath, item);
 
     if (stat.isDirectory()) {
@@ -153,10 +166,10 @@ function getFiles(dir, basePath = '') {
  * 读取文件内容
  */
 function readFile(filePath) {
-  const fullPath = path.join(TEMP_DIR, filePath);
+  const fullPath = safeJoin(TEMP_DIR, filePath);
   if (!fs.existsSync(fullPath)) {
     // 如果临时文件不存在，从正式目录读取
-    const officialPath = path.join(DOCS_DIR, filePath);
+    const officialPath = safeJoin(DOCS_DIR, filePath);
     if (fs.existsSync(officialPath)) {
       return fs.readFileSync(officialPath, 'utf-8');
     }
@@ -169,7 +182,7 @@ function readFile(filePath) {
  * 写入文件到临时目录
  */
 function writeFile(filePath, content) {
-  const fullPath = path.join(TEMP_DIR, filePath);
+  const fullPath = safeJoin(TEMP_DIR, filePath);
   const dir = path.dirname(fullPath);
 
   if (!fs.existsSync(dir)) {
@@ -184,14 +197,14 @@ function writeFile(filePath, content) {
  */
 function deleteFile(filePath, deleteOfficial = true) {
   // 删除临时目录的文件
-  const tempPath = path.join(TEMP_DIR, filePath);
+  const tempPath = safeJoin(TEMP_DIR, filePath);
   if (fs.existsSync(tempPath)) {
     fs.unlinkSync(tempPath);
   }
 
   // 删除正式目录的文件（可选）
   if (deleteOfficial) {
-    const officialPath = path.join(DOCS_DIR, filePath);
+    const officialPath = safeJoin(DOCS_DIR, filePath);
     if (fs.existsSync(officialPath)) {
       fs.unlinkSync(officialPath);
     }
@@ -208,7 +221,8 @@ function getTempFiles() {
 
     for (const item of items) {
       const fullPath = path.join(dir, item);
-      const stat = fs.statSync(fullPath);
+      const stat = fs.lstatSync(fullPath);
+      if (stat.isSymbolicLink()) continue;
       const relativePath = path.join(basePath, item);
 
       // 跳过内部文件
@@ -241,14 +255,14 @@ function getChangeDetails() {
   const changes = [];
 
   // 读取删除列表
-  const deleteListPath = path.join(TEMP_DIR, '.delete-list');
+  const deleteListPath = safeJoin(TEMP_DIR, '.delete-list');
   const deleteList = fs.existsSync(deleteListPath)
     ? JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'))
     : [];
 
   for (const filePath of tempFiles) {
-    const officialPath = path.join(DOCS_DIR, filePath);
-    const tempPath = path.join(TEMP_DIR, filePath);
+    const officialPath = safeJoin(DOCS_DIR, filePath);
+    const tempPath = safeJoin(TEMP_DIR, filePath);
 
     if (deleteList.includes(filePath)) {
       // 文件被移动了（旧位置在删除列表，新位置在临时目录）
@@ -328,7 +342,7 @@ app.post('/api/new/:path(*)', (req, res) => {
     const dirPath = req.params.path || '';
     const { name } = req.body;
 
-    const fullPath = path.join(TEMP_DIR, dirPath, name);
+    const fullPath = safeJoin(TEMP_DIR, dirPath, name);
     const dir = path.dirname(fullPath);
 
     if (!fs.existsSync(dir)) {
@@ -349,8 +363,8 @@ app.post('/api/folder/:path(*)', (req, res) => {
     const { name } = req.body;
 
     // 同时创建到正式目录和临时目录，确保立即可见
-    const tempPath = path.join(TEMP_DIR, basePath, name);
-    const docPath = path.join(DOCS_DIR, basePath, name);
+    const tempPath = safeJoin(TEMP_DIR, basePath, name);
+    const docPath = safeJoin(DOCS_DIR, basePath, name);
     fs.mkdirSync(tempPath, { recursive: true });
     fs.mkdirSync(docPath, { recursive: true });
 
@@ -371,11 +385,11 @@ app.post('/api/rename/:path(*)', (req, res) => {
     }
 
     // 构建完整路径
-    const fullOldPath = path.join(TEMP_DIR, oldPath);
-    const fullOldPathOfficial = path.join(DOCS_DIR, oldPath);
+    const fullOldPath = safeJoin(TEMP_DIR, oldPath);
+    const fullOldPathOfficial = safeJoin(DOCS_DIR, oldPath);
     const dir = path.dirname(fullOldPath);
-    const fullNewPath = path.join(dir, newName);
     const relativeNewPath = path.join(path.dirname(oldPath), newName);
+    const fullNewPath = safeJoin(TEMP_DIR, relativeNewPath);
 
     // 检查是否存在于临时目录
     const existsInTemp = fs.existsSync(fullOldPath);
@@ -391,7 +405,7 @@ app.post('/api/rename/:path(*)', (req, res) => {
       fs.renameSync(fullOldPath, fullNewPath);
     } else {
       // 如果在正式目录，复制到临时目录并用新名称
-      const newTempPath = path.join(TEMP_DIR, relativeNewPath);
+      const newTempPath = safeJoin(TEMP_DIR, relativeNewPath);
       const newDir = path.dirname(newTempPath);
 
       if (!fs.existsSync(newDir)) {
@@ -401,7 +415,7 @@ app.post('/api/rename/:path(*)', (req, res) => {
       fs.copyFileSync(fullOldPathOfficial, newTempPath);
 
       // 标记旧文件为待删除
-      const deleteListPath = path.join(TEMP_DIR, '.delete-list');
+      const deleteListPath = safeJoin(TEMP_DIR, '.delete-list');
       let deleteList = [];
       if (fs.existsSync(deleteListPath)) {
         deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
@@ -422,8 +436,8 @@ app.post('/api/rename/:path(*)', (req, res) => {
 app.delete('/api/file/:path(*)', (req, res) => {
   try {
     const filePath = req.params.path;
-    const tempPath = path.join(TEMP_DIR, filePath);
-    const officialPath = path.join(DOCS_DIR, filePath);
+    const tempPath = safeJoin(TEMP_DIR, filePath);
+    const officialPath = safeJoin(DOCS_DIR, filePath);
 
     // 判断是文件还是目录
     const isDirectory = fs.existsSync(officialPath) ?
@@ -431,7 +445,7 @@ app.delete('/api/file/:path(*)', (req, res) => {
       (fs.existsSync(tempPath) && fs.statSync(tempPath).isDirectory());
 
     // 添加到删除列表
-    const deleteListPath = path.join(TEMP_DIR, '.delete-list');
+    const deleteListPath = safeJoin(TEMP_DIR, '.delete-list');
     let deleteList = [];
     if (fs.existsSync(deleteListPath)) {
       deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
@@ -466,8 +480,8 @@ function deployFiles() {
   const tempFiles = getTempFiles();
 
   for (const file of tempFiles) {
-    const srcPath = path.join(TEMP_DIR, file);
-    const destPath = path.join(DOCS_DIR, file);
+    const srcPath = safeJoin(TEMP_DIR, file);
+    const destPath = safeJoin(DOCS_DIR, file);
     const destDir = path.dirname(destPath);
 
     if (!fs.existsSync(destDir)) {
@@ -478,12 +492,12 @@ function deployFiles() {
   }
 
   // 2. 处理删除列表
-  const deleteListPath = path.join(TEMP_DIR, '.delete-list');
+  const deleteListPath = safeJoin(TEMP_DIR, '.delete-list');
   if (fs.existsSync(deleteListPath)) {
     const deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
 
     for (const item of deleteList) {
-      const itemPath = path.join(DOCS_DIR, item);
+      const itemPath = safeJoin(DOCS_DIR, item);
       if (fs.existsSync(itemPath)) {
         const stat = fs.statSync(itemPath);
         if (stat.isDirectory()) {
@@ -550,7 +564,7 @@ app.post('/api/upload/file', upload.single('file'), (req, res) => {
     const filePath = targetDir ? `${targetDir}/${fileName}` : fileName;
 
     // 创建目标目录
-    const fullPath = path.join(TEMP_DIR, filePath);
+    const fullPath = safeJoin(TEMP_DIR, filePath);
     const dir = path.dirname(fullPath);
 
     if (!fs.existsSync(dir)) {
@@ -603,13 +617,13 @@ app.post('/api/move', (req, res) => {
     }
 
     // 读取原文件内容（从正式目录）
-    const officialPath = path.join(DOCS_DIR, from);
+    const officialPath = safeJoin(DOCS_DIR, from);
     let content = '';
     if (fs.existsSync(officialPath)) {
       content = fs.readFileSync(officialPath, 'utf-8');
     } else {
       // 如果正式目录不存在，尝试从临时目录读取
-      const tempPath = path.join(TEMP_DIR, from);
+      const tempPath = safeJoin(TEMP_DIR, from);
       if (fs.existsSync(tempPath)) {
         content = fs.readFileSync(tempPath, 'utf-8');
       }
@@ -619,7 +633,7 @@ app.post('/api/move', (req, res) => {
     writeFile(newPath, content);
 
     // 将原文件路径添加到 delete-list（部署时删除旧位置）
-    const deleteListPath = path.join(TEMP_DIR, '.delete-list');
+    const deleteListPath = safeJoin(TEMP_DIR, '.delete-list');
     let deleteList = [];
     if (fs.existsSync(deleteListPath)) {
       deleteList = JSON.parse(fs.readFileSync(deleteListPath, 'utf-8'));
@@ -669,7 +683,7 @@ app.post('/api/clear', (req, res) => {
 app.delete('/api/temp/:path(*)', (req, res) => {
   try {
     const filePath = req.params.path;
-    const tempPath = path.join(TEMP_DIR, filePath);
+    const tempPath = safeJoin(TEMP_DIR, filePath);
 
     if (fs.existsSync(tempPath)) {
       fs.unlinkSync(tempPath);
