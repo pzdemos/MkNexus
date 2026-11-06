@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 package-lock.json
+
+# Docs content is data, not code — never commit it
+src/docs/
